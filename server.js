@@ -216,4 +216,4 @@ if (require.main === module) {
   });
 }
 
-module.exports = { app, createApp, startServer };
+module.exports = Object.assign(app, { app, createApp, startServer });
