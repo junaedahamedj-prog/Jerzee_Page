@@ -1,14 +1,16 @@
 {
   "name": "jerzee-node-demo",
   "version": "1.0.0",
-  "description": "JERZEE sports store Node.js + Express + SQLite demo",
+  "description": "JERZEE sports store Node.js + Express + Supabase demo",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
+    "migrate:sqlite": "node scripts/migrate-sqlite-to-supabase.js",
     "test": "node --test"
   },
   "dependencies": {
+    "dotenv": "^18.0.5",
     "express": "^5.1.0",
     "sql.js": "^1.13.0"
   }

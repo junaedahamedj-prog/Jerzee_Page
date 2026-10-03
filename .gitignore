@@ -18,7 +18,7 @@ coverage/
 dist/
 build/
 
-# Local SQLite database and journal files
+# Local SQLite database retained as the source for one-time migration
 data/*.db
 data/*.db-*
 

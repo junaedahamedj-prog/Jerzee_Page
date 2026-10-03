@@ -1,11 +1,59 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { startServer } = require('../server');
+const { createApp, startServer } = require('../server');
 
 let server;
 
+class TestOrderStore {
+  constructor() {
+    this.orders = [];
+    this.nextId = 1;
+  }
+
+  async initialize() {}
+
+  async listOrders() {
+    return [...this.orders].sort((a, b) => b.id - a.id).map((order) => ({ ...order }));
+  }
+
+  async createOrder(order) {
+    const id = this.nextId++;
+    this.orders.push({
+      id,
+      customer_name: order.customerName,
+      email: order.email,
+      phone: order.phone,
+      address: order.address,
+      product: order.product,
+      size: order.size,
+      quantity: order.quantity,
+      total: order.total,
+      status: 'Pending',
+      created_at: new Date().toISOString(),
+    });
+    return id;
+  }
+
+  async deleteOrderById(id) {
+    this.orders = this.orders.filter((order) => order.id !== Number(id));
+  }
+
+  async clearCancelledOrders() {
+    this.orders = this.orders.filter(
+      (order) => String(order.status).toLowerCase() !== 'cancelled'
+    );
+  }
+
+  async updateOrderStatus(id, status) {
+    const order = this.orders.find((item) => item.id === Number(id));
+    if (order) {
+      order.status = status;
+    }
+  }
+}
+
 test.before(async () => {
-  server = await startServer(0);
+  server = await startServer(0, '127.0.0.1', createApp(new TestOrderStore()));
 });
 
 test.after(async () => {

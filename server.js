@@ -1,83 +1,12 @@
+require('dotenv').config();
+
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const initSqlJs = require('sql.js');
+const { SupabaseOrdersStore } = require('./supabase-orders-store');
 
-const app = express();
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
-const dbDir = path.join(__dirname, 'data');
-const dbPath = path.join(dbDir, 'jerzee.db');
-
-if (!fs.existsSync(dbDir)) {
-  fs.mkdirSync(dbDir, { recursive: true });
-}
-
-let SQL = null;
-let db = null;
-const dbReady = initSqlJs().then((sql) => {
-  SQL = sql;
-  initDatabase();
-});
-
-function saveDatabase() {
-  if (!db) return;
-  const binary = db.export();
-  fs.writeFileSync(dbPath, Buffer.from(binary));
-}
-
-function parseOrders() {
-  if (!db) return [];
-
-  const results = db.exec('SELECT * FROM orders ORDER BY id DESC');
-  if (!results.length) return [];
-
-  return results[0].values.map((values) => {
-    const row = {};
-    results[0].columns.forEach((column, index) => {
-      row[column] = values[index];
-    });
-    return row;
-  });
-}
-
-function deleteOrderById(id) {
-  if (!db) return;
-  db.run('DELETE FROM orders WHERE id = ?', [Number(id)]);
-  saveDatabase();
-}
-
-function clearCancelledOrders() {
-  if (!db) return;
-  db.run("DELETE FROM orders WHERE LOWER(COALESCE(status, '')) = 'cancelled'");
-  saveDatabase();
-}
-
-function initDatabase() {
-  if (!SQL) return;
-
-  const fileBuffer = fs.existsSync(dbPath) ? fs.readFileSync(dbPath) : null;
-  db = new SQL.Database(fileBuffer || undefined);
-  db.run(`CREATE TABLE IF NOT EXISTS orders (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    customer_name TEXT NOT NULL,
-    email TEXT,
-    phone TEXT NOT NULL,
-    address TEXT NOT NULL,
-    product TEXT NOT NULL,
-    size TEXT NOT NULL,
-    quantity INTEGER NOT NULL,
-    total INTEGER NOT NULL,
-    status TEXT NOT NULL DEFAULT 'Pending',
-    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
-  )`);
-  const orderColumns = db.exec('PRAGMA table_info(orders)')[0]?.values || [];
-  if (!orderColumns.some((column) => column[1] === 'email')) {
-    db.run('ALTER TABLE orders ADD COLUMN email TEXT');
-  }
-  clearCancelledOrders();
-  saveDatabase();
-}
 
 function sanitizeOrderInput(payload = {}) {
   const customerName = String(payload.customerName || '').trim();
@@ -122,9 +51,6 @@ function normalizeStatus(status) {
   return map[normalized] || null;
 }
 
-app.use(express.json({ limit: '1mb' }));
-app.use(express.static(path.join(__dirname, 'public')));
-
 const productsFilePath = path.join(__dirname, 'data', 'products.json');
 
 function getProductsCatalog() {
@@ -139,112 +65,121 @@ function getProductsCatalog() {
   return [];
 }
 
-app.get('/api/products', (req, res) => {
-  const { sport, q } = req.query;
-  let products = getProductsCatalog();
+function createApp(orderStore = new SupabaseOrdersStore()) {
+  const app = express();
+  app.locals.orderStore = orderStore;
 
-  if (sport && sport !== 'all') {
-    const targetSport = String(sport).trim().toLowerCase();
-    products = products.filter(
-      (p) => String(p.sportKey || '').toLowerCase() === targetSport ||
-             String(p.sport || '').toLowerCase() === targetSport
+  app.use(express.json({ limit: '1mb' }));
+  app.use(express.static(path.join(__dirname, 'public')));
+
+  app.get('/api/products', (req, res) => {
+    const { sport, q } = req.query;
+    let products = getProductsCatalog();
+
+    if (sport && sport !== 'all') {
+      const targetSport = String(sport).trim().toLowerCase();
+      products = products.filter(
+        (p) => String(p.sportKey || '').toLowerCase() === targetSport ||
+               String(p.sport || '').toLowerCase() === targetSport
+      );
+    }
+
+    if (q) {
+      const query = String(q).trim().toLowerCase();
+      products = products.filter(
+        (p) => p.name.toLowerCase().includes(query) ||
+               (p.sport && p.sport.toLowerCase().includes(query)) ||
+               (p.description && p.description.toLowerCase().includes(query))
+      );
+    }
+
+    res.json(products);
+  });
+
+  app.get('/api/orders', async (req, res) => {
+    const { orderStore } = req.app.locals;
+
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+
+    const orders = await orderStore.listOrders();
+    const cancelledIds = orders
+      .filter((order) => String(order.status ?? '').trim().toLowerCase() === 'cancelled')
+      .map((order) => order.id);
+
+    await Promise.all(cancelledIds.map((id) => orderStore.deleteOrderById(id)));
+    if (cancelledIds.length) {
+      await orderStore.clearCancelledOrders();
+    }
+
+    const visibleOrders = (cancelledIds.length ? await orderStore.listOrders() : orders).filter(
+      (order) => String(order.status ?? '').trim().toLowerCase() !== 'cancelled'
     );
-  }
 
-  if (q) {
-    const query = String(q).trim().toLowerCase();
-    products = products.filter(
-      (p) => p.name.toLowerCase().includes(query) ||
-             (p.sport && p.sport.toLowerCase().includes(query)) ||
-             (p.description && p.description.toLowerCase().includes(query))
-    );
-  }
+    res.json(visibleOrders);
+  });
 
-  res.json(products);
-});
+  app.post('/api/orders', async (req, res) => {
+    const email = String(req.body?.email || '').trim();
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      return res.status(400).json({ error: 'Please provide a valid email address.' });
+    }
 
-app.get('/api/orders', async (req, res) => {
-  await dbReady;
+    const orderData = sanitizeOrderInput(req.body);
+    if (!orderData) {
+      return res.status(400).json({ error: 'Please provide valid order details for all required fields.' });
+    }
 
-  res.set('Cache-Control', 'no-store, no-cache, must-revalidate, max-age=0');
-  res.set('Pragma', 'no-cache');
-  res.set('Expires', '0');
+    const orderId = await req.app.locals.orderStore.createOrder({
+      ...orderData,
+      email,
+    });
 
-  const orders = parseOrders();
-  const cancelledIds = orders
-    .filter((order) => String(order.status ?? '').trim().toLowerCase() === 'cancelled')
-    .map((order) => order.id);
+    return res.status(201).json({ message: 'Order placed successfully!', orderId });
+  });
 
-  cancelledIds.forEach((id) => deleteOrderById(id));
-  if (cancelledIds.length) {
-    clearCancelledOrders();
-  }
+  app.patch('/api/orders/:id', async (req, res) => {
+    const normalizedStatus = normalizeStatus(req.body?.status);
 
-  const visibleOrders = parseOrders().filter(
-    (order) => String(order.status ?? '').trim().toLowerCase() !== 'cancelled'
-  );
+    if (!normalizedStatus) {
+      return res.status(400).json({ error: 'Invalid status.' });
+    }
 
-  res.json(visibleOrders);
-});
+    if (normalizedStatus === 'Cancelled') {
+      await req.app.locals.orderStore.deleteOrderById(req.params.id);
+      await req.app.locals.orderStore.clearCancelledOrders();
+      return res.json({ message: 'Order cancelled and removed.' });
+    }
 
-app.post('/api/orders', async (req, res) => {
-  await dbReady;
+    await req.app.locals.orderStore.updateOrderStatus(req.params.id, normalizedStatus);
 
-  const email = String(req.body?.email || '').trim();
-  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-    return res.status(400).json({ error: 'Please provide a valid email address.' });
-  }
+    return res.json({ message: `Status updated to ${normalizedStatus}.` });
+  });
 
-  const orderData = sanitizeOrderInput(req.body);
-  if (!orderData) {
-    return res.status(400).json({ error: 'Please provide valid order details for all required fields.' });
-  }
+  app.delete('/api/orders/:id', async (req, res) => {
+    await req.app.locals.orderStore.deleteOrderById(req.params.id);
+    return res.json({ message: 'Order deleted.' });
+  });
 
-  const { customerName, phone, address, product, size, quantity, total } = orderData;
-  db.run(
-    `INSERT INTO orders (customer_name, email, phone, address, product, size, quantity, total)
-     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
-    [customerName, email, phone, address, product, size, quantity, total]
-  );
-  saveDatabase();
+  app.use((error, req, res, next) => {
+    if (res.headersSent) {
+      return next(error);
+    }
 
-  const result = db.exec('SELECT id FROM orders ORDER BY id DESC LIMIT 1');
-  const orderId = Number(result[0]?.values?.[0]?.[0] ?? 0);
+    console.error('Request failed:', error);
+    return res.status(500).json({ error: 'The request could not be completed.' });
+  });
 
-  return res.status(201).json({ message: 'Order placed successfully!', orderId });
-});
+  return app;
+}
 
-app.patch('/api/orders/:id', async (req, res) => {
-  await dbReady;
+const app = createApp();
 
-  const normalizedStatus = normalizeStatus(req.body?.status);
-
-  if (!normalizedStatus) {
-    return res.status(400).json({ error: 'Invalid status.' });
-  }
-
-  if (normalizedStatus === 'Cancelled') {
-    deleteOrderById(req.params.id);
-    clearCancelledOrders();
-    return res.json({ message: 'Order cancelled and removed.' });
-  }
-
-  db.run('UPDATE orders SET status = ? WHERE id = ?', [normalizedStatus, Number(req.params.id)]);
-  saveDatabase();
-
-  return res.json({ message: `Status updated to ${normalizedStatus}.` });
-});
-
-app.delete('/api/orders/:id', async (req, res) => {
-  await dbReady;
-  deleteOrderById(req.params.id);
-  return res.json({ message: 'Order deleted.' });
-});
-
-async function startServer(port = PORT, host = HOST) {
-  await dbReady;
+async function startServer(port = PORT, host = HOST, serverApp = app) {
+  await serverApp.locals.orderStore.initialize();
   return new Promise((resolve, reject) => {
-    const server = app.listen(port, host, () => {
+    const server = serverApp.listen(port, host, () => {
       const address = server.address();
       const actualPort = address && typeof address === 'object' ? address.port : port;
 
@@ -260,7 +195,10 @@ async function startServer(port = PORT, host = HOST) {
 }
 
 if (require.main === module) {
-  startServer();
+  startServer().catch((error) => {
+    console.error('Failed to start JERZEE:', error.message);
+    process.exitCode = 1;
+  });
 }
 
-module.exports = { app, startServer };
+module.exports = { app, createApp, startServer };
