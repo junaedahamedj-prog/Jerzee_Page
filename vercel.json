@@ -14,10 +14,7 @@
   ],
   "functions": {
     "api/index.js": {
-      "includeFiles": [
-        "public/**",
-        "data/products.json"
-      ]
+      "includeFiles": "{public/**,data/products.json}"
     }
   }
 }
