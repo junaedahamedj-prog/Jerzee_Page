@@ -183,6 +183,19 @@ function createApp(orderStore = new SupabaseOrdersStore()) {
     }
 
     console.error('Request failed:', error);
+    if (error.code === 'SUPABASE_NOT_CONFIGURED') {
+      return res.status(503).json({ error: error.message });
+    }
+    if (error.code === 'PGRST205' || error.code === '42P01') {
+      return res.status(503).json({
+        error: 'The Supabase orders table is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if (error.status === 401 || error.status === 403) {
+      return res.status(503).json({
+        error: 'Supabase credentials or orders-table permissions are not configured correctly.',
+      });
+    }
     return res.status(500).json({ error: 'The request could not be completed.' });
   });
 

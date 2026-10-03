@@ -43,7 +43,10 @@ class SupabaseRestClient {
       const message = typeof data === 'object' && data?.message
         ? data.message
         : `Supabase returned HTTP ${response.status}`;
-      throw new Error(message);
+      const error = new Error(message);
+      error.status = response.status;
+      error.code = typeof data === 'object' ? data?.code : undefined;
+      throw error;
     }
 
     return data;

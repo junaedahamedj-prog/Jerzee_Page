@@ -10,7 +10,9 @@ class SupabaseOrdersStore {
     const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
     if (!supabaseUrl || !serviceRoleKey) {
-      throw new Error('Set SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY before starting the server.');
+      const error = new Error('Supabase is not configured. Add SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in the Vercel project settings.');
+      error.code = 'SUPABASE_NOT_CONFIGURED';
+      throw error;
     }
 
     this.client = new SupabaseRestClient(supabaseUrl, serviceRoleKey);

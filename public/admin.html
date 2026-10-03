@@ -295,11 +295,12 @@
 
         try {
           const response = await fetch('/api/orders', { cache: 'no-store' });
+          const ordersResult = await response.json();
           if (!response.ok) {
-            throw new Error(`Orders API returned ${response.status}`);
+            throw new Error(ordersResult.error || `Orders API returned ${response.status}`);
           }
 
-          const orders = await response.json();
+          const orders = ordersResult;
 
           // Update stats
           const totalOrders = orders.length;
@@ -392,7 +393,7 @@
           });
         } catch (error) {
           console.error('Failed to load orders:', error);
-          showAdminStatus('The admin portal could not reach the orders API. Refresh or check the server.', 'error');
+          showAdminStatus(error.message || 'The admin portal could not reach the orders API. Refresh or check the server.', 'error');
           const rows = document.getElementById('rows');
           if (rows) {
             rows.innerHTML = `
