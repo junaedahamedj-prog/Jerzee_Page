@@ -1,0 +1,15 @@
+{
+  "name": "jerzee-node-demo",
+  "version": "1.0.0",
+  "description": "JERZEE sports store Node.js + Express + SQLite demo",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^5.1.0",
+    "sql.js": "^1.13.0"
+  }
+}

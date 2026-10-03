@@ -1,0 +1,74 @@
+[
+  {
+    "id": "barcelona-home-2026",
+    "name": "FC Barcelona 2026 home Jersey",
+    "sport": "Football",
+    "sportKey": "football",
+    "price": 1199,
+    "image": "/images/products/barcalona.jpg",
+    "badge": "Bestseller",
+    "description": "Blaugrana heritage with engineered vapor-weave micro-mesh for peak match performance.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  },
+  {
+    "id": "real-madrid-away-2026",
+    "name": "Real Madrid 2026 Away Jersey",
+    "sport": "Football",
+    "sportKey": "football",
+    "price": 1199,
+    "image": "/images/products/realmadrid.jpg",
+    "badge": "Top Pick",
+    "description": "Sophisticated obsidian black away edition with metallic gold trim and aeroready comfort.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  },
+  {
+    "id": "Ac-Milan-2026",
+    "name": "Ac Milan home kit 2026",
+    "sport": "Football",
+    "sportKey": "football",
+    "price": 1150,
+    "image": "/images/products/acmilan.jpg",
+    "badge": "National Pride",
+    "description": "A classic Rossoneri design featuring the iconic red-and-black stripes. Lightweight, comfortable, and perfect for match days, training, or everyday football style.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  },
+  {
+    "id": "red-bull-racing-2026",
+    "name": "Red Bull Racing Official Jersey 2026",
+    "sport": "F1 / Racing",
+    "sportKey": "racing",
+    "price": 1350,
+    "image": "/images/products/redbull.jpg",
+    "badge": "F1 Official",
+    "description": "High-octane motorsport crew kit with aerodynamic raglan sleeves and ergonomic side panels.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  },
+  {
+    "id": "ferrari-racing-2026",
+    "name": "Scuderia Ferrari F1 Team Jersey 2026",
+    "sport": "F1 / Racing",
+    "sportKey": "racing",
+    "price": 1350,
+    "image": "/images/products/ferrari.jpg",
+    "badge": "Speed Icon",
+    "description": "Iconic Rosso Corsa red racing silhouette with carbon-styled side panels and gold-piped accents.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  },
+  {
+    "id": "bangladesh-football-2026",
+    "name": "Bangladesh National Football Kit 2026",
+    "sport": "Football",
+    "sportKey": "football",
+    "price": 999,
+    "image": "/images/products/bangladeshhome.jpg",
+    "badge": "New Season",
+    "description": "Vibrant forest green match kit featuring dynamic scarlet chest disc and athletic flex hem.",
+    "featured": true,
+    "sizes": ["S", "M", "L", "XL", "XXL"]
+  }
+]

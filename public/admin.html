@@ -1,0 +1,415 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JERZEE Operations — Admin Portal</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <style>
+      :root {
+        --bg-primary: #050505;
+        --bg-secondary: #0D0D0D;
+        --bg-card: #121212;
+        --border: rgba(255, 255, 255, 0.08);
+        --accent-lime: #B6FF00;
+        --text-primary: #FFFFFF;
+        --text-secondary: #A0A0A5;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; }
+      body {
+        font-family: 'Plus Jakarta Sans', sans-serif;
+        background: var(--bg-primary);
+        color: var(--text-primary);
+        padding: 36px 40px;
+        min-height: 100vh;
+      }
+      header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding-bottom: 24px;
+        border-bottom: 1px solid var(--border);
+        margin-bottom: 28px;
+        flex-wrap: wrap;
+        gap: 16px;
+      }
+      .brand-title {
+        display: flex;
+        align-items: center;
+        gap: 4px;
+        font-family: 'Outfit', sans-serif;
+        font-size: 24px;
+        font-weight: 900;
+        letter-spacing: 3px;
+      }
+      .admin-brand-mark {
+        width: 38px;
+        height: 38px;
+        flex: 0 0 auto;
+        object-fit: contain;
+      }
+      .brand-dot {
+        width: 8px;
+        height: 8px;
+        background: var(--accent-lime);
+        border-radius: 50%;
+        box-shadow: 0 0 10px var(--accent-lime);
+      }
+      .brand-badge {
+        font-size: 11px;
+        background: rgba(182, 255, 0, 0.12);
+        color: var(--accent-lime);
+        border: 1px solid rgba(182, 255, 0, 0.3);
+        padding: 3px 8px;
+        border-radius: 4px;
+        font-weight: 800;
+        letter-spacing: 1px;
+      }
+      .actions-group {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+      }
+      .btn-storefront {
+        background: transparent;
+        color: var(--text-secondary);
+        border: 1px solid var(--border);
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        text-decoration: none;
+        transition: all 0.2s ease;
+      }
+      .btn-storefront:hover {
+        color: #fff;
+        border-color: #fff;
+      }
+      #refreshBtn {
+        background: var(--accent-lime);
+        color: #000;
+        border: none;
+        border-radius: 8px;
+        padding: 10px 18px;
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        font-size: 13px;
+        letter-spacing: 1px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+      }
+      #refreshBtn:hover {
+        background: #c9ff33;
+        transform: translateY(-1px);
+        box-shadow: 0 0 16px rgba(182, 255, 0, 0.3);
+      }
+      .stats-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 16px;
+        margin-bottom: 28px;
+      }
+      .stat-card {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        padding: 20px;
+      }
+      .stat-label {
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 1px;
+        color: var(--text-secondary);
+        margin-bottom: 6px;
+      }
+      .stat-value {
+        font-family: 'Outfit', sans-serif;
+        font-size: 28px;
+        font-weight: 800;
+        color: #fff;
+      }
+      .table-wrapper {
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 14px;
+        overflow: hidden;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      th, td {
+        padding: 14px 18px;
+        border-bottom: 1px solid var(--border);
+        text-align: left;
+        vertical-align: middle;
+      }
+      th {
+        font-family: 'Outfit', sans-serif;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+        color: var(--text-secondary);
+        background: #090909;
+      }
+      tr:hover td {
+        background: rgba(255, 255, 255, 0.02);
+      }
+      .order-id {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        color: var(--accent-lime);
+      }
+      .order-customer {
+        font-weight: 700;
+        color: #fff;
+      }
+      .order-email {
+        margin-top: 4px;
+        color: var(--text-secondary);
+        font-size: 12px;
+        font-weight: 400;
+        overflow-wrap: anywhere;
+      }
+      .order-total {
+        font-family: 'Outfit', sans-serif;
+        font-weight: 800;
+        color: #fff;
+      }
+      select {
+        background: #090909;
+        color: #fff;
+        padding: 8px 12px;
+        border: 1px solid #333;
+        border-radius: 6px;
+        font-size: 13px;
+        outline: none;
+      }
+      select:focus {
+        border-color: var(--accent-lime);
+      }
+      .delete-btn {
+        background: rgba(255, 82, 82, 0.15);
+        color: #ff6b6b;
+        border: 1px solid rgba(255, 82, 82, 0.3);
+        border-radius: 6px;
+        padding: 7px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        margin-left: 6px;
+      }
+      .delete-btn:hover {
+        background: #ff5252;
+        color: #fff;
+      }
+      @media (max-width: 900px) {
+        body { padding: 20px; }
+        .table-wrapper { overflow-x: auto; }
+        table { min-width: 760px; }
+      }
+    </style>
+  </head>
+  <body>
+    <header>
+      <div class="brand-title">
+        <img class="admin-brand-mark" src="/images/jerzee-mark.png" alt="" aria-hidden="true" />
+        <span>JERZEE</span>
+        <span class="brand-dot"></span>
+        <span class="brand-badge">ADMIN</span>
+      </div>
+      <div class="actions-group">
+        <a href="/" class="btn-storefront">← Storefront</a>
+        <button type="button" id="refreshBtn">↻ REFRESH</button>
+      </div>
+    </header>
+
+    <div class="stats-grid">
+      <div class="stat-card">
+        <div class="stat-label">Total Orders</div>
+        <div class="stat-value" id="statTotalOrders">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Pending Dispatch</div>
+        <div class="stat-value" id="statPendingOrders" style="color: var(--accent-lime);">0</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-label">Recorded Revenue</div>
+        <div class="stat-value" id="statTotalRevenue">৳0</div>
+      </div>
+    </div>
+
+    <div id="adminStatus" style="display:none; margin: 0 0 18px; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(182,255,0,.25); background: rgba(182,255,0,.08); color: var(--accent-lime);"></div>
+
+    <div class="table-wrapper">
+      <table>
+        <thead>
+          <tr>
+            <th>ID</th>
+            <th>Customer</th>
+            <th>Phone</th>
+            <th>Product</th>
+            <th>Size</th>
+            <th>Qty</th>
+            <th>Total</th>
+            <th>Address</th>
+            <th>Status / Actions</th>
+          </tr>
+        </thead>
+        <tbody id="rows"></tbody>
+      </table>
+    </div>
+
+    <script>
+      const statusValues = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+
+      function escapeHtml(value) {
+        return String(value ?? '')
+          .replace(/&/g, '&amp;')
+          .replace(/</g, '&lt;')
+          .replace(/>/g, '&gt;')
+          .replace(/"/g, '&quot;')
+          .replace(/'/g, '&#039;');
+      }
+
+      function showAdminStatus(message, tone = 'success') {
+        const statusEl = document.getElementById('adminStatus');
+        if (!statusEl) return;
+
+        statusEl.textContent = message;
+        statusEl.style.display = 'block';
+        statusEl.style.borderColor = tone === 'error' ? 'rgba(255, 82, 82, 0.45)' : 'rgba(182, 255, 0, 0.25)';
+        statusEl.style.background = tone === 'error' ? 'rgba(255, 82, 82, 0.08)' : 'rgba(182, 255, 0, 0.08)';
+        statusEl.style.color = tone === 'error' ? '#ff8a8a' : 'var(--accent-lime)';
+      }
+
+      async function loadOrders() {
+        const refreshBtn = document.getElementById('refreshBtn');
+        if (refreshBtn) refreshBtn.disabled = true;
+
+        try {
+          const response = await fetch('/api/orders', { cache: 'no-store' });
+          if (!response.ok) {
+            throw new Error(`Orders API returned ${response.status}`);
+          }
+
+          const orders = await response.json();
+
+          // Update stats
+          const totalOrders = orders.length;
+          const pendingOrders = orders.filter(o => String(o.status || '').toLowerCase() === 'pending').length;
+          const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+
+          document.getElementById('statTotalOrders').textContent = totalOrders;
+          document.getElementById('statPendingOrders').textContent = pendingOrders;
+          document.getElementById('statTotalRevenue').textContent = `৳${totalRevenue.toLocaleString('en-BD')}`;
+
+          const rows = document.getElementById('rows');
+          if (orders.length === 0) {
+            rows.innerHTML = `
+              <tr>
+                <td colspan="9" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                  No active orders in the database. Place an order on the storefront to test!
+                </td>
+              </tr>
+            `;
+            showAdminStatus('No active orders right now.', 'success');
+            return;
+          }
+
+          rows.innerHTML = orders.map((order) => `
+            <tr>
+              <td class="order-id">#${order.id}</td>
+              <td class="order-customer">
+                ${escapeHtml(order.customer_name)}
+                <div class="order-email">Email: ${escapeHtml(order.email || '—')}</div>
+              </td>
+              <td>${escapeHtml(order.phone)}</td>
+              <td>${escapeHtml(order.product)}</td>
+              <td><strong>${escapeHtml(order.size)}</strong></td>
+              <td>${order.quantity}</td>
+              <td class="order-total">৳${Number(order.total).toLocaleString('en-BD')}</td>
+              <td style="max-width: 220px; font-size: 13px; color: var(--text-secondary);">${escapeHtml(order.address)}</td>
+              <td>
+                <select data-order-id="${order.id}">
+                  ${statusValues.map((status) => `<option value="${status}" ${status === order.status ? 'selected' : ''}>${status}</option>`).join('')}
+                </select>
+                <button type="button" class="delete-btn" data-order-id="${order.id}">Delete</button>
+              </td>
+            </tr>
+          `).join('');
+
+          rows.querySelectorAll('select').forEach((select) => {
+            select.addEventListener('change', async (event) => {
+              const id = Number(event.target.dataset.orderId);
+              const nextStatus = event.target.value;
+              try {
+                const response = await fetch(`/api/orders/${id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ status: nextStatus }),
+                  cache: 'no-store'
+                });
+                if (!response.ok) {
+                  throw new Error(`Status update failed with ${response.status}`);
+                }
+                showAdminStatus(`Order #${id} moved to ${nextStatus}.`, 'success');
+                await loadOrders();
+              } catch (error) {
+                console.error('Admin status update failed:', error);
+                showAdminStatus('Status update failed. Please try again.', 'error');
+              }
+            });
+          });
+
+          rows.querySelectorAll('.delete-btn').forEach((button) => {
+            button.addEventListener('click', async (event) => {
+              const id = Number(event.target.dataset.orderId);
+              const confirmed = window.confirm('Delete this order permanently?');
+              if (!confirmed) return;
+
+              try {
+                const response = await fetch(`/api/orders/${id}`, {
+                  method: 'DELETE',
+                  cache: 'no-store'
+                });
+                if (!response.ok) {
+                  throw new Error(`Delete failed with ${response.status}`);
+                }
+                showAdminStatus(`Order #${id} was deleted.`, 'success');
+                await loadOrders();
+              } catch (error) {
+                console.error('Admin delete failed:', error);
+                showAdminStatus('Delete failed. Please retry.', 'error');
+              }
+            });
+          });
+        } catch (error) {
+          console.error('Failed to load orders:', error);
+          showAdminStatus('The admin portal could not reach the orders API. Refresh or check the server.', 'error');
+          const rows = document.getElementById('rows');
+          if (rows) {
+            rows.innerHTML = `
+              <tr>
+                <td colspan="9" style="text-align: center; padding: 48px; color: var(--text-secondary);">
+                  The orders feed is unavailable. Please check the server and refresh the page.
+                </td>
+              </tr>
+            `;
+          }
+        } finally {
+          if (refreshBtn) refreshBtn.disabled = false;
+        }
+      }
+
+      document.getElementById('refreshBtn').addEventListener('click', loadOrders);
+      loadOrders();
+    </script>
+  </body>
+</html>

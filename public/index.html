@@ -1,0 +1,572 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JERZEE — Wear The Game | Premium Sports Jerseys</title>
+  <meta name="description"
+    content="Official & premium quality sports jerseys for football, cricket, and motorsport enthusiasts. Wear the game with JERZEE." />
+
+  <!-- Google Fonts Preconnect & Stylesheet -->
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link
+    href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800;900&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap"
+    rel="stylesheet" />
+
+  <!-- JERZEE Premium Design System Stylesheet -->
+  <link rel="stylesheet" href="/css/style.css" />
+</head>
+
+<body>
+  <!-- ======================================================================
+         1. STICKY HEADER / NAVIGATION
+         ====================================================================== -->
+  <header class="site-header" id="siteHeader">
+    <div class="header-container">
+      <!-- Brand Logo -->
+      <a href="#hero" class="brand-logo" id="brandLogo" aria-label="JERZEE Home">
+        <img class="brand-mark" src="/images/jerzee-mark.png" alt="" aria-hidden="true" />
+        <span>JERZEE</span>
+        <span class="brand-dot"></span>
+      </a>
+
+      <!-- Desktop Navigation -->
+      <nav class="desktop-nav" aria-label="Main Navigation">
+        <ul class="nav-links">
+          <li><a href="#hero" class="nav-link active">Home</a></li>
+          <li><a href="#products-section" class="nav-link">Shop</a></li>
+          <li class="nav-dropdown">
+            <button type="button" class="nav-link dropdown-trigger" aria-haspopup="true" aria-expanded="false">
+              <span>Sports</span>
+              <svg class="dropdown-icon" viewBox="0 0 10 6">
+                <path d="M1 1L5 5L9 1" stroke="currentColor" stroke-width="1.8" fill="none" stroke-linecap="round"
+                  stroke-linejoin="round" />
+              </svg>
+            </button>
+            <ul class="dropdown-menu" aria-label="Sports Categories">
+              <li>
+                <a href="#products-section" class="dropdown-item" data-nav-sport="football">
+                  <span class="sport-emoji">⚽</span>
+                  <span>Football</span>
+                </a>
+              </li>
+              <li>
+                <a href="#products-section" class="dropdown-item" data-nav-sport="cricket">
+                  <span class="sport-emoji">🏏</span>
+                  <span>Cricket</span>
+                </a>
+              </li>
+              <li>
+                <a href="#products-section" class="dropdown-item" data-nav-sport="racing">
+                  <span class="sport-emoji">🏎️</span>
+                  <span>F1 / Racing</span>
+                </a>
+              </li>
+            </ul>
+          </li>
+          <li><a href="#about" class="nav-link">About</a></li>
+        </ul>
+      </nav>
+
+      <!-- Header Actions: Search, Account, Cart, Mobile Toggle -->
+      <div class="nav-actions">
+        <!-- Search Trigger -->
+        <button type="button" class="icon-btn" id="searchTrigger" aria-label="Search Jerseys"
+          title="Search (Press / or Ctrl+K)">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+        </button>
+
+        <!-- Account Trigger -->
+        <button type="button" class="icon-btn" id="accountTrigger" aria-label="Account" title="Account Portal"
+          onclick="alert('JERZEE Athlete Portal: Phase 2 will bring instant customer profiles and order tracking. For current order status, please visit the Admin Portal.')">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"></path>
+            <circle cx="12" cy="7" r="4"></circle>
+          </svg>
+        </button>
+
+        <!-- Shopping Cart Trigger -->
+        <button type="button" class="icon-btn" id="cartTrigger" aria-label="Open Shopping Cart" title="View Cart">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"
+            stroke-linejoin="round">
+            <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
+            <line x1="3" y1="6" x2="21" y2="6"></line>
+            <path d="M16 10a4 4 0 0 1-8 0"></path>
+          </svg>
+          <span class="cart-count" id="cartCount">0</span>
+        </button>
+
+        <!-- Mobile Menu Hamburger Button -->
+        <button type="button" class="hamburger-btn" id="hamburgerBtn" aria-label="Toggle Navigation Menu"
+          aria-expanded="false">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Mobile Navigation Drawer -->
+    <div class="mobile-nav-drawer" id="mobileNavDrawer">
+      <ul class="mobile-nav-list">
+        <li><a href="#hero" class="mobile-nav-link active">Home</a></li>
+        <li><a href="#products-section" class="mobile-nav-link">Shop All Jerseys</a></li>
+        <li>
+          <div class="mobile-nav-link">Sports</div>
+          <ul class="mobile-sports-sublist">
+            <li><a href="#products-section" data-nav-sport="football">⚽ Football Jerseys</a></li>
+            <li><a href="#products-section" data-nav-sport="cricket">🏏 Cricket Jerseys</a></li>
+            <li><a href="#products-section" data-nav-sport="racing">🏎️ F1 & Motorsport Wear</a></li>
+          </ul>
+        </li>
+        <li><a href="#about" class="mobile-nav-link">About JERZEE</a></li>
+        <li><a href="/admin.html" class="mobile-nav-link" style="color: var(--accent-lime); font-size: 16px;">Admin
+            Dashboard →</a></li>
+      </ul>
+      <div
+        style="padding-top: 24px; border-top: 1px solid var(--border-subtle); color: var(--text-muted); font-size: 13px;">
+        WEAR THE GAME. • © 2026 JERZEE
+      </div>
+    </div>
+  </header>
+
+  <!-- ======================================================================
+         2. HERO SECTION (CINEMATIC VIDEO BACKGROUND)
+         Supports /public/videos/hero.mp4 with high-res fallback poster
+         ====================================================================== -->
+  <section class="hero-section" id="hero">
+    <div class="hero-video-wrapper">
+      <!-- Fallback background image if video is not available or loading -->
+      <div class="hero-bg-fallback" id="heroFallback"></div>
+
+      <!-- Local hero video automatically loaded from /videos/hero.mp4 -->
+      <video class="hero-video" id="heroVideo" autoplay muted loop playsinline poster="/images/hero_fallback.jpg"
+        aria-hidden="true">
+        <source src="/videos/hero.mp4" type="video/mp4" />
+      </video>
+    </div>
+
+    <!-- Dark gradient overlay for text readability -->
+    <div class="hero-overlay"></div>
+
+    <div class="wrap" style="position: relative; z-index: 5;">
+      <div class="hero-content">
+        <div class="hero-tag">
+          <span class="pulse-dot"></span>
+          <span>PREMIUM SPORTS JERSEYS</span>
+        </div>
+
+        <h1 class="hero-title">
+          WEAR THE<br />
+          <span class="accent-lime">GAME.</span>
+        </h1>
+
+        <p class="hero-subtitle">
+          Official &amp; premium quality jerseys for every sport.<br />
+          Football. Cricket. F1 &amp; Racing.
+        </p>
+
+        <div class="hero-actions">
+          <a href="#products-section" class="btn btn-primary" id="heroShopBtn">
+            <span>SHOP NOW</span>
+            <span class="arrow">→</span>
+          </a>
+          <a href="#sports-section" class="btn btn-secondary" id="heroExploreBtn">
+            <span>Explore Sports</span>
+          </a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+         3. SHOP BY SPORT (3 CURRENT CATEGORIES: FOOTBALL, CRICKET, F1)
+         Flexible architecture: Basketball/Tennis can be added in future config
+         ====================================================================== -->
+  <section class="section-padding sports-section" id="sports-section">
+    <div class="wrap">
+      <div class="section-header">
+        <div>
+          <span class="section-label">CATEGORIES</span>
+          <h2 class="section-title">Shop by Sport</h2>
+        </div>
+        <a href="#products-section" class="section-link" onclick="setSportFilter('all')">
+          <span>View All Sports</span>
+          <span class="arrow">→</span>
+        </a>
+      </div>
+
+      <div class="sports-grid" id="sportsGrid">
+        <!-- Populated dynamically via AVAILABLE_SPORTS in app.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+         4. FEATURED JERSEYS (PRODUCT CATALOG)
+         Loaded from backend /api/products with dynamic size selection & filters
+         ====================================================================== -->
+  <section class="section-padding products-section" id="products-section">
+    <div class="wrap">
+      <div class="section-header">
+        <div>
+          <span class="section-label">FEATURED JERSEYS</span>
+          <h2 class="section-title">Top Picks This Season</h2>
+        </div>
+        <a href="#products-section" class="section-link" onclick="setSportFilter('all')">
+          <span>View All</span>
+          <span class="arrow">→</span>
+        </a>
+      </div>
+
+      <!-- Sport Filter Tabs (Football, Cricket, F1 & Racing) -->
+      <div class="filter-tabs" id="filterTabs" role="tablist">
+        <!-- Populated by JS -->
+      </div>
+
+      <!-- Product Grid -->
+      <div class="products-grid" id="productsGrid">
+        <!-- Populated dynamically via fetchProducts() in app.js -->
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+         5. BRAND PERFORMANCE VALUES / TRUST BANNER
+         ====================================================================== -->
+  <section class="values-section" id="about">
+    <div class="wrap">
+      <div class="values-grid">
+        <div class="value-item">
+          <div class="value-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+            </svg>
+          </div>
+          <div>
+            <h4 class="value-title">100% Authentic Editions</h4>
+            <p class="value-subtitle">Official match and fan grade kits.</p>
+          </div>
+        </div>
+
+        <div class="value-item">
+          <div class="value-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="10"></circle>
+              <path d="M8 12l2 2 4-4"></path>
+            </svg>
+          </div>
+          <div>
+            <h4 class="value-title">Aero-Weave Fabric</h4>
+            <p class="value-subtitle">Ultra-breathable dry-mesh technology.</p>
+          </div>
+        </div>
+
+        <div class="value-item">
+          <div class="value-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="1" y="3" width="15" height="13"></rect>
+              <polygon points="16 8 20 8 23 11 23 16 16 16 16 8"></polygon>
+              <circle cx="5.5" cy="18.5" r="2.5"></circle>
+              <circle cx="18.5" cy="18.5" r="2.5"></circle>
+            </svg>
+          </div>
+          <div>
+            <h4 class="value-title">Nationwide Delivery</h4>
+            <p class="value-subtitle">Express doorstep delivery across Bangladesh.</p>
+          </div>
+        </div>
+
+        <div class="value-item">
+          <div class="value-icon">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polyline points="23 4 23 10 17 10"></polyline>
+              <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path>
+            </svg>
+          </div>
+          <div>
+            <h4 class="value-title">Hassle-Free Exchange</h4>
+            <p class="value-subtitle">Easy size swap &amp; return guarantee.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ======================================================================
+         6. SHOPPING CART DRAWER
+         Modern slide-out panel with item management, subtotal, and checkout
+         ====================================================================== -->
+  <div class="drawer-backdrop" id="cartBackdrop"></div>
+  <aside class="cart-drawer" id="cartDrawer" aria-label="Shopping Cart">
+    <div class="cart-header">
+      <div class="cart-title">
+        <span>YOUR CART</span>
+        <span class="accent-lime">///</span>
+      </div>
+      <button type="button" class="cart-close-btn" id="cartCloseBtn" aria-label="Close Cart">✕</button>
+    </div>
+
+    <div class="cart-items-container" id="cartItems">
+      <!-- Rendered dynamically by app.js -->
+    </div>
+
+    <div class="cart-footer">
+      <div class="cart-summary-row">
+        <span>Subtotal</span>
+        <span id="cartSubtotal">৳0</span>
+      </div>
+      <div class="cart-summary-row">
+        <span>Nationwide Shipping</span>
+        <span style="color: var(--accent-lime);">FREE</span>
+      </div>
+      <div class="cart-summary-row total-row">
+        <span>Total</span>
+        <span id="cartTotal">৳0</span>
+      </div>
+      <button type="button" class="btn btn-primary btn-checkout" id="cartCheckoutBtn">
+        <span>PROCEED TO CHECKOUT →</span>
+      </button>
+    </div>
+  </aside>
+
+  <!-- ======================================================================
+         7. CHECKOUT / ORDER MODAL (SUBMITS TO /api/orders)
+         ====================================================================== -->
+  <div class="order-modal" id="orderModal" role="dialog" aria-modal="true" aria-labelledby="orderModalHeading">
+    <div class="order-modal-backdrop" id="orderBackdrop"></div>
+    <div class="order-modal-card">
+      <div class="order-modal-header">
+        <h3 class="order-modal-title" id="orderModalHeading">Place Your Order</h3>
+        <button type="button" class="cart-close-btn" id="orderCloseBtn" aria-label="Close Order Modal">✕</button>
+      </div>
+
+      <!-- Order Form (Submits to /api/orders) -->
+      <form id="orderForm">
+        <div class="order-grid-2">
+          <div class="order-form-group">
+            <label for="customerName">Full Name *</label>
+            <input type="text" id="customerName" name="customerName" class="order-input" placeholder="e.g. Junaed Ahamed"
+              required />
+          </div>
+
+          <div class="order-form-group">
+            <label for="email">Email Address *</label>
+            <input type="email" id="email" name="email" class="order-input"
+              placeholder="Enter your email address" required />
+          </div>
+        </div>
+
+        <div class="order-form-group">
+          <label for="phone">Phone Number *</label>
+          <input type="tel" id="phone" name="phone" class="order-input" placeholder="e.g. 01XXXXXXXXX" required />
+        </div>
+
+        <div class="order-form-group">
+          <label for="address">Delivery Address *</label>
+          <textarea id="address" name="address" class="order-textarea" placeholder="House / Road / Area / City"
+            required></textarea>
+        </div>
+
+        <div class="order-form-group">
+          <label for="orderProductSelect">Select Jersey *</label>
+          <select id="orderProductSelect" name="product" class="order-select" required>
+            <!-- Populated from catalog in app.js -->
+          </select>
+        </div>
+
+        <div class="order-grid-2">
+          <div class="order-form-group">
+            <label for="orderSizeSelect">Size *</label>
+            <select id="orderSizeSelect" name="size" class="order-select" required>
+              <option value="S">S — Small</option>
+              <option value="M" selected>M — Medium</option>
+              <option value="L">L — Large</option>
+              <option value="XL">XL — Extra Large</option>
+              <option value="XXL">XXL — Double Extra Large</option>
+            </select>
+          </div>
+
+          <div class="order-form-group">
+            <label for="orderQuantityInput">Quantity *</label>
+            <input type="number" id="orderQuantityInput" name="quantity" class="order-input" min="1" max="10" value="1"
+              required />
+          </div>
+        </div>
+
+        <input type="hidden" name="total" id="orderHiddenTotal" value="1200" />
+
+        <!-- Real-time Order Summary -->
+        <div class="order-summary-box">
+          <div class="order-summary-item">
+            <span>Payment Method</span>
+            <span style="color: #fff; font-weight: 700;">Cash on Delivery (COD)</span>
+          </div>
+          <div class="order-summary-item highlight">
+            <span>Payable Total</span>
+            <span id="orderDisplayTotal">৳1,200</span>
+          </div>
+        </div>
+
+        <button type="submit" class="btn btn-primary" style="width: 100%;">
+          <span>PLACE ORDER →</span>
+        </button>
+
+        <div id="formMsg" role="alert"></div>
+      </form>
+
+      <!-- Order Success View -->
+      <div class="order-success-view" id="orderSuccessView">
+        <div class="order-success-icon">✓</div>
+        <h3 class="order-success-title">Order Confirmed!</h3>
+        <div class="order-success-id" id="orderSuccessId">Order #1001</div>
+        <p style="color: var(--text-secondary); font-size: 14px; margin-bottom: 8px;">
+          Thank you for ordering with JERZEE. We are preparing your jersey for dispatch.
+        </p>
+        <p id="orderSuccessSummary" style="color: #fff; font-weight: 700; font-size: 14px; margin-bottom: 24px;"></p>
+        <button type="button" class="btn btn-primary" onclick="closeOrderModal()">
+          Continue Shopping
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+         8. LIVE SEARCH MODAL (SEARCH JERSEYS BY NAME/SPORT)
+         ====================================================================== -->
+  <div class="search-modal" id="searchModal" role="dialog" aria-modal="true" aria-labelledby="searchModalTitle">
+    <div class="search-backdrop" id="searchBackdrop"></div>
+    <div class="search-container">
+      <div class="search-input-wrap">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="11" cy="11" r="8"></circle>
+          <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+        </svg>
+        <input type="search" class="search-input" id="searchInput"
+          placeholder="Search jerseys (e.g. Barcelona, Bangladesh, Ferrari)..." autocomplete="off"
+          aria-label="Search Jerseys" />
+        <span class="search-shortcut-badge">ESC</span>
+      </div>
+      <div class="search-results-list" id="searchResults">
+        <!-- Populated live by performSearch() in app.js -->
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================================================================
+         9. FOOTER
+         ====================================================================== -->
+  <footer class="site-footer">
+    <div class="wrap">
+      <div class="footer-top">
+        <!-- Brand Column -->
+        <div class="footer-brand">
+          <div class="brand-logo">
+            <img class="brand-mark" src="/images/jerzee-mark.png" alt="" aria-hidden="true" />
+            <span>JERZEE</span>
+            <span class="brand-dot"></span>
+          </div>
+          <div class="footer-tagline">WEAR THE GAME.</div>
+          <p class="footer-desc">
+            Premium athletic apparel and official jerseys for football, cricket, and motorsport enthusiasts worldwide.
+          </p>
+        </div>
+
+        <!-- Quick Links -->
+        <div>
+          <h4 class="footer-col-title">Quick Links</h4>
+          <ul class="footer-nav-list">
+            <li><a href="#hero" class="footer-nav-link">Home</a></li>
+            <li><a href="#products-section" class="footer-nav-link">Shop All</a></li>
+            <li><a href="#about" class="footer-nav-link">About Us</a></li>
+            <li><a href="#about" class="footer-nav-link">Contact</a></li>
+          </ul>
+        </div>
+
+        <!-- Sports Currently Available -->
+        <div>
+          <h4 class="footer-col-title">Sports</h4>
+          <ul class="footer-nav-list">
+            <li><a href="#products-section" class="footer-nav-link" onclick="setSportFilter('football')">Football</a>
+            </li>
+            <li><a href="#products-section" class="footer-nav-link" onclick="setSportFilter('cricket')">Cricket</a></li>
+            <li><a href="#products-section" class="footer-nav-link" onclick="setSportFilter('racing')">F1 &amp;
+                Racing</a></li>
+          </ul>
+        </div>
+
+        <!-- Customer Service -->
+        <div>
+          <h4 class="footer-col-title">Customer Service</h4>
+          <ul class="footer-nav-list">
+            <li><a href="#about" class="footer-nav-link">FAQs</a></li>
+            <li><a href="#about" class="footer-nav-link">Shipping Info</a></li>
+            <li><a href="#about" class="footer-nav-link">Returns &amp; Swaps</a></li>
+            <li><a href="/admin.html" class="footer-nav-link">Track Order</a></li>
+          </ul>
+        </div>
+
+        <!-- Newsletter Signup -->
+        <div>
+          <h4 class="footer-col-title">Newsletter</h4>
+          <p class="footer-newsletter-text">
+            Get the latest updates on new kit drops, tournament specials, and exclusive member restocks.
+          </p>
+          <form class="newsletter-form" id="newsletterForm">
+            <input type="email" class="newsletter-input" placeholder="Your email address" required
+              aria-label="Email address for newsletter" />
+            <button type="submit" class="newsletter-btn" aria-label="Subscribe">
+              →
+            </button>
+          </form>
+          <div class="newsletter-feedback" id="newsletterFeedback"></div>
+        </div>
+      </div>
+
+      <!-- Footer Bottom Bar -->
+      <div class="footer-bottom">
+        <div class="copyright">
+          &copy; 2026 JERZEE. All rights reserved. Built with Node.js &amp; SQLite. 
+          Designed & Developed by Junaed Ahamed
+        </div>
+
+        <div class="social-links">
+          <a href="#" class="social-btn" aria-label="Instagram" title="Instagram">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.163 6.162 6.163 6.162-2.759 6.162-6.163c0-3.403-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.44 1.441 1.44c.795 0 1.439-.645 1.439-1.44s-.644-1.44-1.439-1.44z" />
+            </svg>
+          </a>
+          <a href="#" class="social-btn" aria-label="X (Twitter)" title="X">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+          </a>
+          <a href="#" class="social-btn" aria-label="Facebook" title="Facebook">
+            <svg viewBox="0 0 24 24">
+              <path
+                d="M9 8H6v4h3v12h5V12h3.642L18 8h-4V6.333C14 5.374 14.5 5 15.7 5H18V0h-3.808C10.596 0 9 1.583 9 4.615V8z" />
+            </svg>
+          </a>
+        </div>
+
+        <div>
+          <a href="/admin.html" class="footer-admin-link">Staff Admin Portal →</a>
+        </div>
+      </div>
+    </div>
+  </footer>
+
+  <!-- JavaScript Controller -->
+  <script src="/js/app.js"></script>
+</body>
+
+</html>
