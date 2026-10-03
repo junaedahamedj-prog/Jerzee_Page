@@ -9,6 +9,9 @@
 2. Copy `.env.example` to `.env` and set `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` from your Supabase project settings.
 3. Keep the service-role key private. It is used only by the Node.js server and must never be added to browser code or committed.
 
+## Deploy to Vercel
+Import the repository into Vercel and add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under **Project Settings → Environment Variables** for the Production environment (and Preview if needed), then redeploy. Vercel does not read the local `.env` file. Run the schema in Supabase before using order endpoints.
+
 ## Migrate existing SQLite orders
 The original `data/jerzee.db` file is retained as the source for this one-time import. After configuring Supabase and applying the schema, run:
 

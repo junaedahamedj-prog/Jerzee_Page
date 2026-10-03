@@ -68,9 +68,24 @@ function getProductsCatalog() {
 function createApp(orderStore = new SupabaseOrdersStore()) {
   const app = express();
   app.locals.orderStore = orderStore;
+  let orderStoreReady;
+  app.locals.initializeOrderStore = () => {
+    if (!orderStoreReady) {
+      orderStoreReady = Promise.resolve().then(() => orderStore.initialize());
+    }
+    return orderStoreReady;
+  };
 
   app.use(express.json({ limit: '1mb' }));
   app.use(express.static(path.join(__dirname, 'public')));
+  app.use('/api/orders', async (req, res, next) => {
+    try {
+      await req.app.locals.initializeOrderStore();
+      next();
+    } catch (error) {
+      next(error);
+    }
+  });
 
   app.get('/api/products', (req, res) => {
     const { sport, q } = req.query;
@@ -177,7 +192,7 @@ function createApp(orderStore = new SupabaseOrdersStore()) {
 const app = createApp();
 
 async function startServer(port = PORT, host = HOST, serverApp = app) {
-  await serverApp.locals.orderStore.initialize();
+  await serverApp.locals.initializeOrderStore();
   return new Promise((resolve, reject) => {
     const server = serverApp.listen(port, host, () => {
       const address = server.address();
