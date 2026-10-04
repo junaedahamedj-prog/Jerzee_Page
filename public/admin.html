@@ -226,6 +226,7 @@
       </div>
       <div class="actions-group">
         <a href="/" class="btn-storefront">← Storefront</a>
+        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 15 sec</span>
         <button type="button" id="refreshBtn">↻ REFRESH</button>
       </div>
     </header>
@@ -289,7 +290,11 @@
         statusEl.style.color = tone === 'error' ? '#ff8a8a' : 'var(--accent-lime)';
       }
 
-      async function loadOrders() {
+      let ordersLoadInProgress = false;
+
+      async function loadOrders({ silent = false } = {}) {
+        if (ordersLoadInProgress) return;
+        ordersLoadInProgress = true;
         const refreshBtn = document.getElementById('refreshBtn');
         if (refreshBtn) refreshBtn.disabled = true;
 
@@ -320,7 +325,7 @@
                 </td>
               </tr>
             `;
-            showAdminStatus('No active orders right now.', 'success');
+            if (!silent) showAdminStatus('No active orders right now.', 'success');
             return;
           }
 
@@ -405,12 +410,16 @@
             `;
           }
         } finally {
+          ordersLoadInProgress = false;
           if (refreshBtn) refreshBtn.disabled = false;
         }
       }
 
       document.getElementById('refreshBtn').addEventListener('click', loadOrders);
       loadOrders();
+      window.setInterval(() => {
+        if (!document.hidden) loadOrders({ silent: true });
+      }, 15000);
     </script>
   </body>
 </html>
