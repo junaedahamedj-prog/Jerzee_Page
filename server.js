@@ -3,6 +3,7 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
+const { createHash, timingSafeEqual } = require('crypto');
 const { SupabaseOrdersStore } = require('./supabase-orders-store');
 
 const PORT = Number(process.env.PORT || 3000);
@@ -65,8 +66,45 @@ function getProductsCatalog() {
   return [];
 }
 
-function createApp(orderStore = new SupabaseOrdersStore()) {
+function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
   const app = express();
+  const adminUsername = options.adminUsername ?? process.env.ADMIN_USERNAME;
+  const adminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
+  const adminConfigured = Boolean(adminUsername && adminPassword);
+
+  function requireAdmin(req, res, next) {
+    if (!adminConfigured) {
+      return res.status(503).json({ error: 'Admin access is not configured on this server.' });
+    }
+
+    const authorization = req.get('Authorization') || '';
+    const match = authorization.match(/^Basic\s+([A-Za-z0-9+/]+=*)$/i);
+    if (!match) {
+      res.set('WWW-Authenticate', 'Basic realm="JERZEE Admin", charset="UTF-8"');
+      return res.status(401).send('Authentication required.');
+    }
+
+    const decoded = Buffer.from(match[1], 'base64').toString('utf8');
+    const separator = decoded.indexOf(':');
+    const suppliedUsername = separator < 0 ? '' : decoded.slice(0, separator);
+    const suppliedPassword = separator < 0 ? '' : decoded.slice(separator + 1);
+    const usernameMatches = timingSafeEqual(
+      createHash('sha256').update(suppliedUsername).digest(),
+      createHash('sha256').update(adminUsername).digest()
+    );
+    const passwordMatches = timingSafeEqual(
+      createHash('sha256').update(suppliedPassword).digest(),
+      createHash('sha256').update(adminPassword).digest()
+    );
+
+    if (separator < 0 || !usernameMatches || !passwordMatches) {
+      res.set('WWW-Authenticate', 'Basic realm="JERZEE Admin", charset="UTF-8"');
+      return res.status(401).send('Authentication required.');
+    }
+
+    next();
+  }
+
   app.locals.orderStore = orderStore;
   let orderStoreReady;
   app.locals.initializeOrderStore = () => {
@@ -77,6 +115,16 @@ function createApp(orderStore = new SupabaseOrdersStore()) {
   };
 
   app.use(express.json({ limit: '1mb' }));
+  app.get(['/staff', '/admin.html'], requireAdmin, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, 'public', 'admin.html'));
+  });
+  app.use('/api/orders', (req, res, next) => {
+    if (['GET', 'PATCH', 'DELETE'].includes(req.method)) {
+      return requireAdmin(req, res, next);
+    }
+    next();
+  });
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api/orders', async (req, res, next) => {
     try {
@@ -214,7 +262,7 @@ async function startServer(port = PORT, host = HOST, serverApp = app) {
       console.log(`JERZEE listening on ${host}:${actualPort}`);
       console.log(`Open on this PC: http://localhost:${actualPort}`);
       console.log(`Access from another device on the same network: http://<YOUR-LAPTOP-IP>:${actualPort}`);
-      console.log(`Admin dashboard: http://localhost:${actualPort}/admin.html`);
+      console.log(`Admin dashboard: http://localhost:${actualPort}/staff (protected)`);
       resolve(server);
     });
 

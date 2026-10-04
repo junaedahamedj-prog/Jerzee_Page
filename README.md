@@ -10,7 +10,7 @@
 3. Keep the service-role key private. It is used only by the Node.js server and must never be added to browser code or committed.
 
 ## Deploy to Vercel
-Import the repository into Vercel and add `SUPABASE_URL` and `SUPABASE_SERVICE_ROLE_KEY` under **Project Settings → Environment Variables** for the Production environment (and Preview if needed), then redeploy. Vercel does not read the local `.env` file. Run the schema in Supabase before using order endpoints.
+Import the repository into Vercel and add `SUPABASE_URL`, `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USERNAME`, and `ADMIN_PASSWORD` under **Project Settings → Environment Variables** for the Production environment (and Preview if needed), then redeploy. Choose a private username and a long, unique password. Vercel does not read the local `.env` file. Run the schema in Supabase before using order endpoints. The admin page and order-management API fail closed until both admin credentials are configured.
 
 ## Migrate existing SQLite orders
 The original `data/jerzee.db` file is retained as the source for this one-time import. After configuring Supabase and applying the schema, run:
@@ -29,10 +29,10 @@ npm start
 
 Open:
 - Store: http://localhost:3000
-- Admin: http://localhost:3000/admin.html
+- Private admin portal: http://localhost:3000/staff
 
 ## How it works
-The existing storefront and admin dashboard use the same Express API and request/response formats. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
+The `/staff` portal is not linked from the storefront and uses browser basic authentication with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables. The old `/admin.html` URL is protected by the same authentication. Order listing and management endpoints also require authentication; customer order submission remains public. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
 
 Run the automated API tests with:
 

@@ -53,13 +53,53 @@ class TestOrderStore {
 }
 
 test.before(async () => {
-  server = await startServer(0, '127.0.0.1', createApp(new TestOrderStore()));
+  server = await startServer(
+    0,
+    '127.0.0.1',
+    createApp(new TestOrderStore(), { adminUsername: 'test-admin', adminPassword: 'test-password' })
+  );
 });
 
 test.after(async () => {
   await new Promise((resolve, reject) => {
     server.close((err) => (err ? reject(err) : resolve()));
   });
+});
+
+function withAdminAuth(options = {}) {
+  return {
+    ...options,
+    headers: {
+      ...options.headers,
+      Authorization: `Basic ${Buffer.from('test-admin:test-password').toString('base64')}`,
+    },
+  };
+}
+
+test('admin portal and order management require authentication', async () => {
+  const port = server.address().port;
+
+  const portalResponse = await fetch(`http://localhost:${port}/staff`);
+  assert.equal(portalResponse.status, 401);
+  assert.match(portalResponse.headers.get('www-authenticate'), /Basic/);
+
+  const oldPortalResponse = await fetch(`http://localhost:${port}/admin.html`);
+  assert.equal(oldPortalResponse.status, 401);
+
+  const ordersResponse = await fetch(`http://localhost:${port}/api/orders`);
+  assert.equal(ordersResponse.status, 401);
+
+  const deleteResponse = await fetch(`http://localhost:${port}/api/orders/1`, {
+    method: 'DELETE',
+  });
+  assert.equal(deleteResponse.status, 401);
+
+  const authenticatedPortalResponse = await fetch(
+    `http://localhost:${port}/staff`,
+    withAdminAuth()
+  );
+  assert.equal(authenticatedPortalResponse.status, 200);
+  assert.match(await authenticatedPortalResponse.text(), /JERZEE Operations/);
 });
 
 test('customer can place an order and admin can view it', async () => {
@@ -85,7 +125,7 @@ test('customer can place an order and admin can view it', async () => {
   const postBody = await postResponse.json();
   assert.ok(postBody.orderId > 0);
 
-  const getResponse = await fetch(`http://localhost:${port}/api/orders`);
+  const getResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(getResponse.status, 200);
   const orders = await getResponse.json();
   assert.ok(Array.isArray(orders));
@@ -183,15 +223,15 @@ test('cancelled orders are removed immediately and on refresh', async () => {
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
 
-  const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, {
+  const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'Cancelled' }),
-  });
+  }));
 
   assert.equal(patchResponse.status, 200);
 
-  const listResponse = await fetch(`http://localhost:${port}/api/orders`);
+  const listResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(listResponse.status, 200);
 
   const refreshedOrders = await listResponse.json();
@@ -219,13 +259,13 @@ test('delete endpoint permanently removes an order from storage', async () => {
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
 
-  const deleteResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, {
+  const deleteResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
     method: 'DELETE',
-  });
+  }));
 
   assert.equal(deleteResponse.status, 200);
 
-  const listResponse = await fetch(`http://localhost:${port}/api/orders`);
+  const listResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(listResponse.status, 200);
 
   const refreshedOrders = await listResponse.json();
@@ -253,15 +293,15 @@ test('status updates accept case-insensitive values and remove cancelled orders'
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
 
-  const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, {
+  const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ status: 'cancelled' }),
-  });
+  }));
 
   assert.equal(patchResponse.status, 200);
 
-  const listResponse = await fetch(`http://localhost:${port}/api/orders`);
+  const listResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(listResponse.status, 200);
   const refreshedOrders = await listResponse.json();
   assert.ok(!refreshedOrders.some((order) => order.id === created.orderId));

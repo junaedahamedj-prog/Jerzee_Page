@@ -1868,17 +1868,6 @@ button, input, select, textarea {
   fill: currentColor;
 }
 
-.footer-admin-link {
-  font-size: 12px;
-  color: var(--text-muted);
-  text-decoration: underline;
-  text-underline-offset: 3px;
-}
-
-.footer-admin-link:hover {
-  color: var(--accent-lime);
-}
-
 /* ==========================================================================
    RESPONSIVE MEDIA QUERIES (1440, 1200, 992, 768, 480, 360)
    ========================================================================== */
