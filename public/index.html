@@ -373,14 +373,14 @@
             required></textarea>
         </div>
 
-        <div class="order-form-group">
+        <div class="order-form-group" id="orderProductGroup">
           <label for="orderProductSelect">Select Jersey *</label>
           <select id="orderProductSelect" name="product" class="order-select" required>
             <!-- Populated from catalog in app.js -->
           </select>
         </div>
 
-        <div class="order-grid-2">
+        <div class="order-grid-2" id="orderSingleItemOptions">
           <div class="order-form-group">
             <label for="orderSizeSelect">Size *</label>
             <select id="orderSizeSelect" name="size" class="order-select" required>
@@ -400,6 +400,11 @@
         </div>
 
         <input type="hidden" name="total" id="orderHiddenTotal" value="1200" />
+
+        <div class="order-summary-box" id="cartOrderSummary" hidden>
+          <strong>Items in your order</strong>
+          <div id="cartOrderSummaryItems"></div>
+        </div>
 
         <!-- Real-time Order Summary -->
         <div class="order-summary-box">

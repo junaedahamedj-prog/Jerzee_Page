@@ -55,11 +55,16 @@ class SupabaseOrdersStore {
   }
 
   async createOrder(order) {
+    const orderIds = await this.createOrders([order]);
+    return orderIds[0];
+  }
+
+  async createOrders(orders) {
     const data = await this.getClient().request('orders', {
       method: 'POST',
       query: { select: 'id' },
       prefer: 'return=representation',
-      body: {
+      body: orders.map((order) => ({
         customer_name: order.customerName,
         email: order.email,
         phone: order.phone,
@@ -68,10 +73,10 @@ class SupabaseOrdersStore {
         size: order.size,
         quantity: order.quantity,
         total: order.total,
-      },
+      })),
     });
 
-    return data[0].id;
+    return data.map((order) => order.id);
   }
 
   async deleteOrderById(id) {

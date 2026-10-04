@@ -34,6 +34,14 @@ class TestOrderStore {
     return id;
   }
 
+  async createOrders(orders) {
+    const ids = [];
+    for (const order of orders) {
+      ids.push(await this.createOrder(order));
+    }
+    return ids;
+  }
+
   async deleteOrderById(id) {
     this.orders = this.orders.filter((order) => order.id !== Number(id));
   }
@@ -134,6 +142,65 @@ test('customer can place an order and admin can view it', async () => {
     order.email === 'customer@example.com' &&
     order.product === 'Barcelona Inspired Jersey'
   ));
+});
+
+test('customer can place every item in the cart in one order request', async () => {
+  const port = server.address().port;
+  const response = await fetch(`http://localhost:${port}/api/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customerName: 'Cart Customer',
+      email: 'cart@example.com',
+      phone: '123456789',
+      address: 'Cart Street 42',
+      items: [
+        { product: 'Barcelona Jersey', size: 'M', quantity: 2, total: 2400 },
+        { product: 'Ferrari Jersey', size: 'L', quantity: 1, total: 1350 },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 201);
+  const result = await response.json();
+  assert.equal(result.orderIds.length, 2);
+
+  const ordersResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
+  const orders = await ordersResponse.json();
+  const cartOrders = orders.filter((order) => order.email === 'cart@example.com');
+  assert.equal(cartOrders.length, 2);
+  assert.deepEqual(
+    cartOrders.map(({ product, size, quantity, total }) => ({ product, size, quantity, total })),
+    [
+      { product: 'Ferrari Jersey', size: 'L', quantity: 1, total: 1350 },
+      { product: 'Barcelona Jersey', size: 'M', quantity: 2, total: 2400 },
+    ]
+  );
+});
+
+test('cart checkout rejects the entire request if any item is invalid', async () => {
+  const port = server.address().port;
+  const response = await fetch(`http://localhost:${port}/api/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      customerName: 'Invalid Cart',
+      email: 'invalid-cart@example.com',
+      phone: '123456789',
+      address: 'Cart Street 42',
+      items: [
+        { product: 'Valid Jersey', size: 'M', quantity: 1, total: 1200 },
+        { product: '', size: 'L', quantity: 1, total: 1200 },
+      ],
+    }),
+  });
+
+  assert.equal(response.status, 400);
+  assert.match((await response.json()).error, /every item/i);
+
+  const ordersResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
+  const orders = await ordersResponse.json();
+  assert.ok(!orders.some((order) => order.email === 'invalid-cart@example.com'));
 });
 
 test('invalid order data is rejected', async () => {

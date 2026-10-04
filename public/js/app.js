@@ -115,7 +115,7 @@ const AppState = {
   selectedSizes: {},
   activeSportFilter: 'all',
   cart: JSON.parse(localStorage.getItem('jerzee_cart') || '[]'),
-  currentCheckoutProduct: null
+  currentCheckoutItems: null
 };
 
 // ==========================================================================
@@ -429,14 +429,10 @@ function initCart() {
 
   if (cartCheckoutBtn) {
     cartCheckoutBtn.addEventListener('click', () => {
-      closeCart();
       if (AppState.cart.length > 0) {
-        const firstItem = AppState.cart[0];
-        const product = AppState.products.find(p => p.name === firstItem.name) || {
-          name: firstItem.name,
-          price: firstItem.price
-        };
-        openOrderModalWithProduct(product, firstItem.size, firstItem.quantity);
+        const cartItems = AppState.cart.map(item => ({ ...item }));
+        closeCart();
+        openOrderModalForCart(cartItems);
       }
     });
   }
@@ -626,6 +622,8 @@ function openOrderModalWithProduct(product, size = 'M', quantity = 1) {
   const form = document.getElementById('orderForm');
 
   if (!modal) return;
+  AppState.currentCheckoutItems = null;
+  setCartCheckoutMode(false);
 
   // Reset modal state
   if (formMsg) {
@@ -659,6 +657,56 @@ function openOrderModalWithProduct(product, size = 'M', quantity = 1) {
   document.body.style.overflow = 'hidden';
 }
 
+function openOrderModalForCart(items) {
+  const modal = document.getElementById('orderModal');
+  const formMsg = document.getElementById('formMsg');
+  const successView = document.getElementById('orderSuccessView');
+  const form = document.getElementById('orderForm');
+
+  if (!modal || items.length === 0) return;
+
+  AppState.currentCheckoutItems = items;
+  if (formMsg) {
+    formMsg.className = '';
+    formMsg.style.display = 'none';
+  }
+  if (successView) successView.style.display = 'none';
+  if (form) form.style.display = 'block';
+
+  const summaryItems = document.getElementById('cartOrderSummaryItems');
+  if (summaryItems) {
+    summaryItems.replaceChildren(...items.map((item) => {
+      const row = document.createElement('div');
+      row.className = 'order-summary-item';
+      row.textContent = `${item.quantity} × ${item.name} (${item.size}) — ৳${(item.price * item.quantity).toLocaleString('en-BD')}`;
+      return row;
+    }));
+  }
+
+  setCartCheckoutMode(true);
+  calculateOrderTotal();
+  modal.classList.add('is-open');
+  document.body.style.overflow = 'hidden';
+}
+
+function setCartCheckoutMode(isCartCheckout) {
+  const productGroup = document.getElementById('orderProductGroup');
+  const optionsGroup = document.getElementById('orderSingleItemOptions');
+  const cartSummary = document.getElementById('cartOrderSummary');
+
+  if (productGroup) {
+    productGroup.hidden = isCartCheckout;
+    productGroup.querySelector('select').disabled = isCartCheckout;
+  }
+  if (optionsGroup) {
+    optionsGroup.hidden = isCartCheckout;
+    optionsGroup.querySelectorAll('select, input').forEach((input) => {
+      input.disabled = isCartCheckout;
+    });
+  }
+  if (cartSummary) cartSummary.hidden = !isCartCheckout;
+}
+
 function closeOrderModal() {
   const modal = document.getElementById('orderModal');
   if (modal) {
@@ -675,10 +723,10 @@ function calculateOrderTotal() {
 
   if (!select || !quantityInput) return;
 
-  const selectedOpt = select.options[select.selectedIndex];
-  const price = Number(selectedOpt?.dataset.price || 1200);
-  const quantity = Math.max(1, parseInt(quantityInput.value, 10) || 1);
-  const total = price * quantity;
+  const total = AppState.currentCheckoutItems
+    ? AppState.currentCheckoutItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+    : Number(select.options[select.selectedIndex]?.dataset.price || 1200) *
+      Math.max(1, parseInt(quantityInput.value, 10) || 1);
 
   if (hiddenTotal) hiddenTotal.value = total;
   if (displayTotal) displayTotal.textContent = `৳${total.toLocaleString('en-BD')}`;
@@ -698,12 +746,22 @@ async function handleOrderSubmit(e) {
     customerName: formData.get('customerName'),
     email: formData.get('email'),
     phone: formData.get('phone'),
-    address: formData.get('address'),
-    product: formData.get('product'),
-    size: formData.get('size'),
-    quantity: Number(formData.get('quantity')),
-    total: Number(formData.get('total'))
+    address: formData.get('address')
   };
+  const isCartCheckout = Array.isArray(AppState.currentCheckoutItems);
+  if (isCartCheckout) {
+    payload.items = AppState.currentCheckoutItems.map((item) => ({
+      product: item.name,
+      size: item.size,
+      quantity: item.quantity,
+      total: item.price * item.quantity
+    }));
+  } else {
+    payload.product = formData.get('product');
+    payload.size = formData.get('size');
+    payload.quantity = Number(formData.get('quantity'));
+    payload.total = Number(formData.get('total'));
+  }
 
   submitBtn.disabled = true;
   submitBtn.textContent = 'Processing Order...';
@@ -730,15 +788,23 @@ async function handleOrderSubmit(e) {
     // Success State
     if (form) form.style.display = 'none';
     if (successView) {
-      document.getElementById('orderSuccessId').textContent = `Order #${result.orderId}`;
-      document.getElementById('orderSuccessSummary').textContent = `${payload.quantity}x ${payload.product} (${payload.size}) — ৳${payload.total.toLocaleString('en-BD')}`;
+      const total = isCartCheckout
+        ? payload.items.reduce((sum, item) => sum + item.total, 0)
+        : payload.total;
+      document.getElementById('orderSuccessId').textContent = isCartCheckout
+        ? `Orders ${result.orderIds.map((id) => `#${id}`).join(', ')}`
+        : `Order #${result.orderId}`;
+      document.getElementById('orderSuccessSummary').textContent = isCartCheckout
+        ? `${payload.items.length} item${payload.items.length === 1 ? '' : 's'} — ৳${total.toLocaleString('en-BD')}`
+        : `${payload.quantity}x ${payload.product} (${payload.size}) — ৳${total.toLocaleString('en-BD')}`;
       successView.style.display = 'block';
     }
 
-    // Clear cart item if ordered
-    AppState.cart = [];
-    saveCart();
-    updateCartUI();
+    if (isCartCheckout) {
+      AppState.cart = [];
+      saveCart();
+      updateCartUI();
+    }
 
   } catch (err) {
     if (formMsg) {

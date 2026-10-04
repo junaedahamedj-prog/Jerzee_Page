@@ -32,7 +32,7 @@ Open:
 - Private admin portal: http://localhost:3000/staff
 
 ## How it works
-The `/staff` portal is not linked from the storefront and uses browser basic authentication with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables. The old `/admin.html` URL is protected by the same authentication. Order listing and management endpoints also require authentication; customer order submission remains public. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
+The `/staff` portal is not linked from the storefront and uses browser basic authentication with the `ADMIN_USERNAME` and `ADMIN_PASSWORD` environment variables. The old `/admin.html` URL is protected by the same authentication. Order listing and management endpoints also require authentication; customer order submission remains public. Cart checkout submits all items together and records each product/size as its own order row with the same customer details. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
 
 Run the automated API tests with:
 

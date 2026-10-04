@@ -109,3 +109,41 @@ test('Supabase REST store supports order creation, listing, status updates, and 
   assert.deepEqual(await store.listOrders(), []);
   assert.ok(requests.every((request) => request.apiKey === 'test-service-role-key'));
 });
+
+test('Supabase REST store creates multiple cart orders in one insert', async () => {
+  const postRequestCount = requests.filter(
+    (request) => request.method === 'POST' && request.url.pathname === '/rest/v1/orders'
+  ).length;
+  const orderIds = await store.createOrders([
+    {
+      customerName: 'Cart Customer',
+      email: 'cart@example.com',
+      phone: '123456789',
+      address: 'Cart Street',
+      product: 'Barcelona Jersey',
+      size: 'M',
+      quantity: 2,
+      total: 2400,
+    },
+    {
+      customerName: 'Cart Customer',
+      email: 'cart@example.com',
+      phone: '123456789',
+      address: 'Cart Street',
+      product: 'Ferrari Jersey',
+      size: 'L',
+      quantity: 1,
+      total: 1350,
+    },
+  ]);
+
+  assert.deepEqual(orderIds, [47, 48]);
+  assert.equal(
+    orders.filter((order) => order.email === 'cart@example.com').length,
+    2
+  );
+  const insertRequests = requests.filter(
+    (request) => request.method === 'POST' && request.url.pathname === '/rest/v1/orders'
+  );
+  assert.equal(insertRequests.length, postRequestCount + 1);
+});

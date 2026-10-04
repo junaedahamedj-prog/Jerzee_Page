@@ -189,6 +189,37 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Please provide a valid email address.' });
     }
 
+    if (Array.isArray(req.body?.items)) {
+      const { customerName, phone, address } = req.body;
+      const items = req.body.items;
+
+      if (!String(customerName || '').trim() || !String(phone || '').trim() ||
+          !String(address || '').trim() || items.length < 1 || items.length > 50) {
+        return res.status(400).json({ error: 'Please provide valid customer details and between 1 and 50 order items.' });
+      }
+
+      const orderItems = items.map((item) => sanitizeOrderInput({
+        customerName,
+        email,
+        phone,
+        address,
+        product: item?.product,
+        size: item?.size,
+        quantity: item?.quantity,
+        total: item?.total,
+      }));
+
+      if (orderItems.some((item) => !item)) {
+        return res.status(400).json({ error: 'Please provide valid details for every item in the cart.' });
+      }
+
+      const orderIds = await req.app.locals.orderStore.createOrders(orderItems);
+      return res.status(201).json({
+        message: 'All items ordered successfully!',
+        orderIds,
+      });
+    }
+
     const orderData = sanitizeOrderInput(req.body);
     if (!orderData) {
       return res.status(400).json({ error: 'Please provide valid order details for all required fields.' });
