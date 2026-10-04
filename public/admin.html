@@ -226,7 +226,7 @@
       </div>
       <div class="actions-group">
         <a href="/" class="btn-storefront">← Storefront</a>
-        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 15 sec</span>
+        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 30 sec</span>
         <button type="button" id="refreshBtn">↻ REFRESH</button>
       </div>
     </header>
@@ -419,7 +419,7 @@
       loadOrders();
       window.setInterval(() => {
         if (!document.hidden) loadOrders({ silent: true });
-      }, 15000);
+      }, 30000);
     </script>
   </body>
 </html>
