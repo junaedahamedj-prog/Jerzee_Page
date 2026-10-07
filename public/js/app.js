@@ -1,12 +1,3 @@
-/**
- * JERZEE — Premium Sportswear Storefront Architecture
- * Modular Vanilla JavaScript Implementation
- */
-
-// ==========================================================================
-// 1. SPORTS CONFIGURATION (EXTENSIBLE ARCHITECTURE)
-// Easily add Basketball, Tennis, etc. in future phases without redesigning.
-// ==========================================================================
 const AVAILABLE_SPORTS = [
   {
     key: 'football',
@@ -606,7 +597,7 @@ function populateOrderModalProductDropdown() {
   if (!select) return;
 
   select.innerHTML = AppState.products.map(p => `
-    <option value="${p.name}" data-price="${p.price}">
+    <option value="${p.id}" data-price="${p.price}">
       ${p.name} — ৳${Number(p.price).toLocaleString('en-BD')} (${p.sport})
     </option>
   `).join('');
@@ -636,7 +627,7 @@ function openOrderModalWithProduct(product, size = 'M', quantity = 1) {
   // Populate selection
   if (select) {
     for (let i = 0; i < select.options.length; i++) {
-      if (select.options[i].value === product.name) {
+      if (select.options[i].value === product.id) {
         select.selectedIndex = i;
         break;
       }
@@ -718,7 +709,6 @@ function closeOrderModal() {
 function calculateOrderTotal() {
   const select = document.getElementById('orderProductSelect');
   const quantityInput = document.getElementById('orderQuantityInput');
-  const hiddenTotal = document.getElementById('orderHiddenTotal');
   const displayTotal = document.getElementById('orderDisplayTotal');
 
   if (!select || !quantityInput) return;
@@ -728,7 +718,6 @@ function calculateOrderTotal() {
     : Number(select.options[select.selectedIndex]?.dataset.price || 1200) *
       Math.max(1, parseInt(quantityInput.value, 10) || 1);
 
-  if (hiddenTotal) hiddenTotal.value = total;
   if (displayTotal) displayTotal.textContent = `৳${total.toLocaleString('en-BD')}`;
 }
 
@@ -751,16 +740,14 @@ async function handleOrderSubmit(e) {
   const isCartCheckout = Array.isArray(AppState.currentCheckoutItems);
   if (isCartCheckout) {
     payload.items = AppState.currentCheckoutItems.map((item) => ({
-      product: item.name,
+      product_id: item.id,
       size: item.size,
-      quantity: item.quantity,
-      total: item.price * item.quantity
+      quantity: item.quantity
     }));
   } else {
-    payload.product = formData.get('product');
+    payload.product_id = formData.get('product_id');
     payload.size = formData.get('size');
     payload.quantity = Number(formData.get('quantity'));
-    payload.total = Number(formData.get('total'));
   }
 
   submitBtn.disabled = true;
@@ -789,14 +776,18 @@ async function handleOrderSubmit(e) {
     if (form) form.style.display = 'none';
     if (successView) {
       const total = isCartCheckout
-        ? payload.items.reduce((sum, item) => sum + item.total, 0)
-        : payload.total;
+        ? AppState.currentCheckoutItems.reduce((sum, item) => sum + item.price * item.quantity, 0)
+        : Number(AppState.products.find((product) => product.id === payload.product_id)?.price || 0) *
+          payload.quantity;
+      const productName = AppState.products.find(
+        (product) => product.id === payload.product_id
+      )?.name || 'Jersey';
       document.getElementById('orderSuccessId').textContent = isCartCheckout
         ? `Orders ${result.orderIds.map((id) => `#${id}`).join(', ')}`
         : `Order #${result.orderId}`;
       document.getElementById('orderSuccessSummary').textContent = isCartCheckout
         ? `${payload.items.length} item${payload.items.length === 1 ? '' : 's'} — ৳${total.toLocaleString('en-BD')}`
-        : `${payload.quantity}x ${payload.product} (${payload.size}) — ৳${total.toLocaleString('en-BD')}`;
+        : `${payload.quantity}x ${productName} (${payload.size}) — ৳${total.toLocaleString('en-BD')}`;
       successView.style.display = 'block';
     }
 

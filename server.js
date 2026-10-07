@@ -9,31 +9,46 @@ const { SupabaseOrdersStore } = require('./supabase-orders-store');
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 
-function sanitizeOrderInput(payload = {}) {
-  const customerName = String(payload.customerName || '').trim();
-  const email = String(payload.email || '').trim();
-  const phone = String(payload.phone || '').trim();
-  const address = String(payload.address || '').trim();
-  const product = String(payload.product || '').trim();
+function prepareOrderInput(payload = {}, customer = payload, products = getProductsCatalog()) {
+  const customerName = String(customer.customerName || '').trim();
+  const email = String(customer.email || '').trim();
+  const phone = String(customer.phone || '').trim();
+  const address = String(customer.address || '').trim();
+  const productId = String(payload.product_id || '').trim();
+  const product = products.find((item) => item.id === productId);
   const size = String(payload.size || '').trim();
   const quantity = Number(payload.quantity);
-  const total = Number(payload.total);
 
-  if (
-    !customerName ||
-    !phone ||
-    !address ||
-    !product ||
-    !size ||
-    !Number.isInteger(quantity) ||
-    quantity < 1 ||
-    !Number.isFinite(total) ||
-    total <= 0
-  ) {
-    return null;
+  if (!customerName || !phone || !address) {
+    return { error: 'Please provide valid customer details.' };
+  }
+  if (!product) {
+    return { error: 'Invalid product' };
+  }
+  if (!Number.isInteger(quantity) || quantity < 1) {
+    return { error: 'Invalid quantity' };
+  }
+  if (!size || (Array.isArray(product.sizes) && !product.sizes.includes(size))) {
+    return { error: 'Invalid size for product' };
   }
 
-  return { customerName, email, phone, address, product, size, quantity, total };
+  const total = Number(product.price) * quantity;
+  if (!Number.isFinite(total) || total <= 0) {
+    return { error: 'Product price is unavailable.' };
+  }
+
+  return {
+    order: {
+      customerName,
+      email,
+      phone,
+      address,
+      product: product.name,
+      size,
+      quantity,
+      total,
+    },
+  };
 }
 
 function normalizeStatus(status) {
@@ -198,21 +213,18 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
         return res.status(400).json({ error: 'Please provide valid customer details and between 1 and 50 order items.' });
       }
 
-      const orderItems = items.map((item) => sanitizeOrderInput({
-        customerName,
-        email,
-        phone,
-        address,
-        product: item?.product,
-        size: item?.size,
-        quantity: item?.quantity,
-        total: item?.total,
-      }));
+      const products = getProductsCatalog();
+      const preparedItems = items.map((item) => prepareOrderInput(
+        item,
+        { customerName, email, phone, address },
+        products
+      ));
 
-      if (orderItems.some((item) => !item)) {
+      if (preparedItems.some((item) => !item.order)) {
         return res.status(400).json({ error: 'Please provide valid details for every item in the cart.' });
       }
 
+      const orderItems = preparedItems.map((item) => item.order);
       const orderIds = await req.app.locals.orderStore.createOrders(orderItems);
       return res.status(201).json({
         message: 'All items ordered successfully!',
@@ -220,14 +232,13 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       });
     }
 
-    const orderData = sanitizeOrderInput(req.body);
-    if (!orderData) {
-      return res.status(400).json({ error: 'Please provide valid order details for all required fields.' });
+    const preparedOrder = prepareOrderInput(req.body, { ...req.body, email });
+    if (!preparedOrder.order) {
+      return res.status(400).json({ error: preparedOrder.error });
     }
 
     const orderId = await req.app.locals.orderStore.createOrder({
-      ...orderData,
-      email,
+      ...preparedOrder.order,
     });
 
     return res.status(201).json({ message: 'Order placed successfully!', orderId });

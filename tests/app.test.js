@@ -3,6 +3,7 @@ const assert = require('node:assert/strict');
 const { createApp, startServer } = require('../server');
 
 let server;
+let orderStore;
 
 class TestOrderStore {
   constructor() {
@@ -61,10 +62,11 @@ class TestOrderStore {
 }
 
 test.before(async () => {
+  orderStore = new TestOrderStore();
   server = await startServer(
     0,
     '127.0.0.1',
-    createApp(new TestOrderStore(), { adminUsername: 'test-admin', adminPassword: 'test-password' })
+    createApp(orderStore, { adminUsername: 'test-admin', adminPassword: 'test-password' })
   );
 });
 
@@ -82,6 +84,14 @@ function withAdminAuth(options = {}) {
       Authorization: `Basic ${Buffer.from('test-admin:test-password').toString('base64')}`,
     },
   };
+}
+
+async function submitOrder(payload) {
+  return fetch(`http://localhost:${server.address().port}/api/orders`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload),
+  });
 }
 
 test('admin portal and order management require authentication', async () => {
@@ -110,6 +120,102 @@ test('admin portal and order management require authentication', async () => {
   assert.match(await authenticatedPortalResponse.text(), /JERZEE Operations/);
 });
 
+test('order total is calculated from the trusted product price and quantity', async () => {
+  for (const [email, quantity, expectedTotal] of [
+    ['price-check-one@example.com', 1, 1199],
+    ['price-check-two@example.com', 2, 2398],
+  ]) {
+    const response = await submitOrder({
+      customerName: 'Price Check',
+      email,
+      phone: '123456789',
+      address: 'Price Street',
+      product_id: 'barcelona-home-2026',
+      size: 'M',
+      quantity,
+    });
+
+    assert.equal(response.status, 201);
+    const order = orderStore.orders.find((item) => item.email === email);
+    assert.equal(order.total, expectedTotal);
+    assert.equal(order.quantity, quantity);
+  }
+});
+
+test('client-supplied low and high totals are ignored', async () => {
+  for (const [email, total] of [
+    ['low-fake-total@example.com', 1],
+    ['high-fake-total@example.com', 999999],
+  ]) {
+    const response = await submitOrder({
+      customerName: 'Manipulated Total',
+      email,
+      phone: '123456789',
+      address: 'Price Street',
+      product_id: 'barcelona-home-2026',
+      size: 'M',
+      quantity: 2,
+      total,
+    });
+
+    assert.equal(response.status, 201);
+    const order = orderStore.orders.find((item) => item.email === email);
+    assert.equal(order.total, 2398);
+    assert.notEqual(order.total, total);
+  }
+});
+
+test('orders reject unknown products without creating an order', async () => {
+  const response = await submitOrder({
+    customerName: 'Unknown Product',
+    email: 'unknown-product@example.com',
+    phone: '123456789',
+    address: 'Price Street',
+    product_id: 'not-a-real-product',
+    size: 'M',
+    quantity: 1,
+  });
+
+  assert.equal(response.status, 400);
+  assert.deepEqual(await response.json(), { error: 'Invalid product' });
+  assert.ok(!orderStore.orders.some((item) => item.email === 'unknown-product@example.com'));
+});
+
+test('orders reject non-positive, non-integer, and non-numeric quantities', async () => {
+  const invalidQuantities = [0, -1, -5, 'abc', null, 1.5, undefined];
+
+  for (const [index, quantity] of invalidQuantities.entries()) {
+    const email = `invalid-quantity-${index}@example.com`;
+    const response = await submitOrder({
+      customerName: 'Invalid Quantity',
+      email,
+      phone: '123456789',
+      address: 'Price Street',
+      product_id: 'barcelona-home-2026',
+      size: 'M',
+      quantity,
+    });
+
+    assert.equal(response.status, 400, `quantity ${String(quantity)} should be rejected`);
+    assert.ok(!orderStore.orders.some((item) => item.email === email));
+  }
+});
+
+test('orders reject sizes not supported by the selected product', async () => {
+  const response = await submitOrder({
+    customerName: 'Invalid Size',
+    email: 'invalid-size@example.com',
+    phone: '123456789',
+    address: 'Price Street',
+    product_id: 'barcelona-home-2026',
+    size: 'XXXXXXXL',
+    quantity: 1,
+  });
+
+  assert.equal(response.status, 400);
+  assert.ok(!orderStore.orders.some((item) => item.email === 'invalid-size@example.com'));
+});
+
 test('customer can place an order and admin can view it', async () => {
   const port = server.address().port;
   const payload = {
@@ -117,10 +223,9 @@ test('customer can place an order and admin can view it', async () => {
     email: 'customer@example.com',
     phone: '123456789',
     address: 'Test Street 42',
-    product: 'Barcelona Inspired Jersey',
+    product_id: 'barcelona-home-2026',
     size: 'L',
     quantity: 2,
-    total: 2400,
   };
 
   const postResponse = await fetch(`http://localhost:${port}/api/orders`, {
@@ -140,7 +245,8 @@ test('customer can place an order and admin can view it', async () => {
   assert.ok(orders.some((order) =>
     order.customer_name === 'Test User' &&
     order.email === 'customer@example.com' &&
-    order.product === 'Barcelona Inspired Jersey'
+    order.product === 'FC Barcelona 2026 home Jersey' &&
+    order.total === 2398
   ));
 });
 
@@ -155,8 +261,8 @@ test('customer can place every item in the cart in one order request', async () 
       phone: '123456789',
       address: 'Cart Street 42',
       items: [
-        { product: 'Barcelona Jersey', size: 'M', quantity: 2, total: 2400 },
-        { product: 'Ferrari Jersey', size: 'L', quantity: 1, total: 1350 },
+        { product_id: 'barcelona-home-2026', size: 'M', quantity: 2 },
+        { product_id: 'ferrari-racing-2026', size: 'L', quantity: 1 },
       ],
     }),
   });
@@ -172,8 +278,8 @@ test('customer can place every item in the cart in one order request', async () 
   assert.deepEqual(
     cartOrders.map(({ product, size, quantity, total }) => ({ product, size, quantity, total })),
     [
-      { product: 'Ferrari Jersey', size: 'L', quantity: 1, total: 1350 },
-      { product: 'Barcelona Jersey', size: 'M', quantity: 2, total: 2400 },
+      { product: 'Scuderia Ferrari F1 Team Jersey 2026', size: 'L', quantity: 1, total: 1350 },
+      { product: 'FC Barcelona 2026 home Jersey', size: 'M', quantity: 2, total: 2398 },
     ]
   );
 });
@@ -189,8 +295,8 @@ test('cart checkout rejects the entire request if any item is invalid', async ()
       phone: '123456789',
       address: 'Cart Street 42',
       items: [
-        { product: 'Valid Jersey', size: 'M', quantity: 1, total: 1200 },
-        { product: '', size: 'L', quantity: 1, total: 1200 },
+        { product_id: 'barcelona-home-2026', size: 'M', quantity: 1 },
+        { product_id: '', size: 'L', quantity: 1 },
       ],
     }),
   });
@@ -214,10 +320,9 @@ test('invalid order data is rejected', async () => {
       email: 'customer@example.com',
       phone: '123',
       address: 'x',
-      product: 'Test Item',
+      product_id: 'barcelona-home-2026',
       size: 'M',
       quantity: 1,
-      total: 0,
     }),
   });
 
@@ -236,10 +341,9 @@ test('orders require an email address', async () => {
       customerName: 'Missing Email',
       phone: '123456789',
       address: 'Test Street 42',
-      product: 'Barcelona Inspired Jersey',
+      product_id: 'barcelona-home-2026',
       size: 'L',
       quantity: 1,
-      total: 1200,
     }),
   });
 
@@ -258,10 +362,9 @@ test('orders reject invalid email addresses', async () => {
       email: 'invalid-email',
       phone: '123456789',
       address: 'Test Street 42',
-      product: 'Barcelona Inspired Jersey',
+      product_id: 'barcelona-home-2026',
       size: 'L',
       quantity: 1,
-      total: 1200,
     }),
   });
 
@@ -280,10 +383,9 @@ test('cancelled orders are removed immediately and on refresh', async () => {
       email: 'cancel@example.com',
       phone: '999',
       address: 'Cancelled Street',
-      product: 'Cancelled Jersey',
+      product_id: 'barcelona-home-2026',
       size: 'M',
       quantity: 1,
-      total: 1000,
     }),
   });
 
@@ -316,10 +418,9 @@ test('delete endpoint permanently removes an order from storage', async () => {
       email: 'delete@example.com',
       phone: '555',
       address: 'Delete Street',
-      product: 'Delete Jersey',
+      product_id: 'ferrari-racing-2026',
       size: 'XL',
       quantity: 1,
-      total: 1500,
     }),
   });
 
@@ -350,10 +451,9 @@ test('status updates accept case-insensitive values and remove cancelled orders'
       email: 'status@example.com',
       phone: '777',
       address: 'Lowercase Street',
-      product: 'Lowercase Jersey',
+      product_id: 'barcelona-home-2026',
       size: 'M',
       quantity: 1,
-      total: 1200,
     }),
   });
 
