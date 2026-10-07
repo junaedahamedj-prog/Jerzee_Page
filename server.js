@@ -8,6 +8,7 @@ const { SupabaseOrdersStore } = require('./supabase-orders-store');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
+const MAX_DATABASE_INTEGER = 2147483647;
 
 function prepareOrderInput(payload = {}, customer = payload, products = getProductsCatalog()) {
   const customerName = String(customer.customerName || '').trim();
@@ -25,7 +26,7 @@ function prepareOrderInput(payload = {}, customer = payload, products = getProdu
   if (!product) {
     return { error: 'Invalid product' };
   }
-  if (!Number.isInteger(quantity) || quantity < 1) {
+  if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_DATABASE_INTEGER) {
     return { error: 'Invalid quantity' };
   }
   if (!size || (Array.isArray(product.sizes) && !product.sizes.includes(size))) {
@@ -33,7 +34,7 @@ function prepareOrderInput(payload = {}, customer = payload, products = getProdu
   }
 
   const total = Number(product.price) * quantity;
-  if (!Number.isFinite(total) || total <= 0) {
+  if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_DATABASE_INTEGER) {
     return { error: 'Product price is unavailable.' };
   }
 
@@ -47,6 +48,7 @@ function prepareOrderInput(payload = {}, customer = payload, products = getProdu
       size,
       quantity,
       total,
+      status: PENDING_CONFIRMATION,
     },
   };
 }
@@ -65,6 +67,14 @@ function normalizeStatus(status) {
   };
 
   return map[normalized] || null;
+}
+
+const PENDING_CONFIRMATION = 'Pending Confirmation';
+
+function parseOrderId(value) {
+  if (!/^[1-9]\d*$/.test(String(value))) return null;
+  const id = Number(value);
+  return Number.isSafeInteger(id) ? id : null;
 }
 
 const productsFilePath = path.join(__dirname, 'data', 'products.json');
@@ -181,21 +191,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     res.set('Pragma', 'no-cache');
     res.set('Expires', '0');
 
-    const orders = await orderStore.listOrders();
-    const cancelledIds = orders
-      .filter((order) => String(order.status ?? '').trim().toLowerCase() === 'cancelled')
-      .map((order) => order.id);
-
-    await Promise.all(cancelledIds.map((id) => orderStore.deleteOrderById(id)));
-    if (cancelledIds.length) {
-      await orderStore.clearCancelledOrders();
-    }
-
-    const visibleOrders = (cancelledIds.length ? await orderStore.listOrders() : orders).filter(
-      (order) => String(order.status ?? '').trim().toLowerCase() !== 'cancelled'
-    );
-
-    res.json(visibleOrders);
+    res.json(await orderStore.listOrders());
   });
 
   app.post('/api/orders', async (req, res) => {
@@ -244,26 +240,143 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     return res.status(201).json({ message: 'Order placed successfully!', orderId });
   });
 
+  app.patch('/api/orders/:id/quantity', async (req, res) => {
+    const id = parseOrderId(req.params.id);
+    const quantity = req.body?.quantity;
+    if (!id || !Number.isInteger(quantity) || quantity < 1 || quantity > MAX_DATABASE_INTEGER) {
+      return res.status(400).json({ error: 'Please provide a valid order ID and positive integer quantity.' });
+    }
+
+    const orders = await req.app.locals.orderStore.listOrders();
+    const order = orders.find((item) => Number(item.id) === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (order.status !== PENDING_CONFIRMATION) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be edited.' });
+    }
+
+    const product = getProductsCatalog().find((item) => item.name === order.product);
+    if (!product || !Array.isArray(product.sizes) || !product.sizes.includes(order.size)) {
+      return res.status(400).json({ error: 'The order product or size is no longer valid.' });
+    }
+    const total = Number(product.price) * quantity;
+    if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_DATABASE_INTEGER) {
+      return res.status(400).json({ error: 'Product price is unavailable.' });
+    }
+
+    const updated = await req.app.locals.orderStore.updatePendingOrder(id, { quantity, total });
+    if (!updated) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be edited.' });
+    }
+
+    return res.json({ message: 'Order quantity updated.', quantity, total });
+  });
+
+  app.patch('/api/orders/:id/confirm', async (req, res) => {
+    const id = parseOrderId(req.params.id);
+    if (!id || (req.body?.quantity !== undefined &&
+        (!Number.isInteger(req.body.quantity) || req.body.quantity < 1 ||
+          req.body.quantity > MAX_DATABASE_INTEGER))) {
+      return res.status(400).json({ error: 'Please provide a valid order ID and positive integer quantity.' });
+    }
+
+    const orders = await req.app.locals.orderStore.listOrders();
+    const order = orders.find((item) => Number(item.id) === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (order.status !== PENDING_CONFIRMATION) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be confirmed.' });
+    }
+
+    const product = getProductsCatalog().find((item) => item.name === order.product);
+    if (!product || !Array.isArray(product.sizes) || !product.sizes.includes(order.size)) {
+      return res.status(400).json({ error: 'The order product or size is no longer valid.' });
+    }
+    const quantity = req.body?.quantity ?? order.quantity;
+    if (!Number.isInteger(quantity) || quantity < 1 || quantity > MAX_DATABASE_INTEGER) {
+      return res.status(400).json({ error: 'Please provide a positive integer quantity.' });
+    }
+    const total = Number(product.price) * quantity;
+    if (!Number.isSafeInteger(total) || total <= 0 || total > MAX_DATABASE_INTEGER) {
+      return res.status(400).json({ error: 'Product price is unavailable.' });
+    }
+
+    const updated = await req.app.locals.orderStore.updatePendingOrder(id, {
+      quantity,
+      total,
+      status: 'Confirmed',
+    });
+    if (!updated) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be confirmed.' });
+    }
+
+    return res.json({ message: 'Order confirmed.', quantity, total, status: 'Confirmed' });
+  });
+
+  app.patch('/api/orders/:id/cancel', async (req, res) => {
+    const id = parseOrderId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Please provide a valid order ID.' });
+    }
+
+    const orders = await req.app.locals.orderStore.listOrders();
+    const order = orders.find((item) => Number(item.id) === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (order.status !== PENDING_CONFIRMATION) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be cancelled.' });
+    }
+
+    const updated = await req.app.locals.orderStore.updatePendingOrder(id, { status: 'Cancelled' });
+    if (!updated) {
+      return res.status(409).json({ error: 'Only pending confirmation orders can be cancelled.' });
+    }
+
+    return res.json({ message: 'Order cancelled.', status: 'Cancelled' });
+  });
+
   app.patch('/api/orders/:id', async (req, res) => {
+    const id = parseOrderId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Please provide a valid order ID.' });
+    }
     const normalizedStatus = normalizeStatus(req.body?.status);
 
-    if (!normalizedStatus) {
+    if (!normalizedStatus || normalizedStatus === 'Cancelled' || normalizedStatus === PENDING_CONFIRMATION) {
       return res.status(400).json({ error: 'Invalid status.' });
     }
 
-    if (normalizedStatus === 'Cancelled') {
-      await req.app.locals.orderStore.deleteOrderById(req.params.id);
-      await req.app.locals.orderStore.clearCancelledOrders();
-      return res.json({ message: 'Order cancelled and removed.' });
+    const order = (await req.app.locals.orderStore.listOrders())
+      .find((item) => Number(item.id) === id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (order.status === PENDING_CONFIRMATION) {
+      return res.status(409).json({ error: 'Confirm or cancel pending orders using their dedicated actions.' });
+    }
+    const permittedNextStatuses = {
+      Confirmed: ['Confirmed', 'Shipped'],
+      Shipped: ['Shipped', 'Delivered'],
+      Delivered: ['Delivered'],
+    };
+    if (!permittedNextStatuses[order.status]?.includes(normalizedStatus)) {
+      return res.status(409).json({ error: 'Invalid order status transition.' });
     }
 
-    await req.app.locals.orderStore.updateOrderStatus(req.params.id, normalizedStatus);
+    await req.app.locals.orderStore.updateOrderStatus(id, normalizedStatus);
 
     return res.json({ message: `Status updated to ${normalizedStatus}.` });
   });
 
   app.delete('/api/orders/:id', async (req, res) => {
-    await req.app.locals.orderStore.deleteOrderById(req.params.id);
+    const id = parseOrderId(req.params.id);
+    if (!id) {
+      return res.status(400).json({ error: 'Please provide a valid order ID.' });
+    }
+    await req.app.locals.orderStore.deleteOrderById(id);
     return res.json({ message: 'Order deleted.' });
   });
 

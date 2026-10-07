@@ -209,6 +209,56 @@
         background: #ff5252;
         color: #fff;
       }
+      .pending-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        align-items: center;
+        min-width: 210px;
+      }
+      .pending-actions select {
+        min-width: 72px;
+      }
+      .pending-quantity {
+        width: 76px;
+        background: #090909;
+        color: #fff;
+        padding: 8px 10px;
+        border: 1px solid #333;
+        border-radius: 6px;
+      }
+      .pending-actions button,
+      .status-action {
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .edit-btn {
+        color: #fff;
+        background: #222;
+      }
+      .confirm-btn {
+        color: #000;
+        background: var(--accent-lime);
+      }
+      .cancel-btn {
+        color: #ff8a8a;
+        background: rgba(255, 82, 82, 0.1);
+        border-color: rgba(255, 82, 82, 0.3) !important;
+      }
+      .order-status {
+        display: inline-block;
+        margin-bottom: 8px;
+        padding: 4px 8px;
+        border-radius: 5px;
+        color: var(--accent-lime);
+        background: rgba(182, 255, 0, 0.1);
+        font-size: 11px;
+        font-weight: 800;
+      }
       @media (max-width: 900px) {
         body { padding: 20px; }
         .table-wrapper { overflow-x: auto; }
@@ -237,7 +287,7 @@
         <div class="stat-value" id="statTotalOrders">0</div>
       </div>
       <div class="stat-card">
-        <div class="stat-label">Pending Dispatch</div>
+        <div class="stat-label">Pending Confirmation</div>
         <div class="stat-value" id="statPendingOrders" style="color: var(--accent-lime);">0</div>
       </div>
       <div class="stat-card">
@@ -268,7 +318,7 @@
     </div>
 
     <script>
-      const statusValues = ['Pending', 'Confirmed', 'Shipped', 'Delivered', 'Cancelled'];
+      const pendingConfirmation = 'Pending Confirmation';
 
       function escapeHtml(value) {
         return String(value ?? '')
@@ -305,12 +355,21 @@
             throw new Error(ordersResult.error || `Orders API returned ${response.status}`);
           }
 
+          const productsResponse = await fetch('/api/products', { cache: 'no-store' });
+          const products = await productsResponse.json();
+          if (!productsResponse.ok) {
+            throw new Error(products.error || `Products API returned ${productsResponse.status}`);
+          }
+          const productPrices = new Map(products.map((product) => [product.name, Number(product.price)]));
           const orders = ordersResult;
 
           // Update stats
           const totalOrders = orders.length;
-          const pendingOrders = orders.filter(o => String(o.status || '').toLowerCase() === 'pending').length;
-          const totalRevenue = orders.reduce((sum, o) => sum + (Number(o.total) || 0), 0);
+          const pendingOrders = orders.filter(o => o.status === pendingConfirmation).length;
+          const totalRevenue = orders.reduce(
+            (sum, order) => sum + (order.status === 'Cancelled' ? 0 : Number(order.total) || 0),
+            0
+          );
 
           document.getElementById('statTotalOrders').textContent = totalOrders;
           document.getElementById('statPendingOrders').textContent = pendingOrders;
@@ -321,7 +380,7 @@
             rows.innerHTML = `
               <tr>
                 <td colspan="9" style="text-align: center; padding: 48px; color: var(--text-secondary);">
-                  No active orders in the database. Place an order on the storefront to test!
+                  No orders in the database. Place an order on the storefront to test!
                 </td>
               </tr>
             `;
@@ -336,22 +395,101 @@
                 ${escapeHtml(order.customer_name)}
                 <div class="order-email">Email: ${escapeHtml(order.email || '—')}</div>
               </td>
-              <td>${escapeHtml(order.phone)}</td>
+              <td><strong>${escapeHtml(order.phone)}</strong></td>
               <td>${escapeHtml(order.product)}</td>
               <td><strong>${escapeHtml(order.size)}</strong></td>
-              <td>${order.quantity}</td>
-              <td class="order-total">৳${Number(order.total).toLocaleString('en-BD')}</td>
+              <td>
+                ${order.status === pendingConfirmation
+                  ? `<input class="pending-quantity" type="number" min="1" step="1" data-order-id="${order.id}"
+                      aria-label="Quantity for order ${order.id}" value="${Number(order.quantity)}" />`
+                  : order.quantity}
+              </td>
+              <td class="order-total" data-order-id="${order.id}" data-unit-price="${productPrices.get(order.product) || 0}">
+                <div>Price: ৳${Number(productPrices.get(order.product) || 0).toLocaleString('en-BD')}</div>
+                <div class="order-total-value">Total: ৳${Number(order.total).toLocaleString('en-BD')}</div>
+              </td>
               <td style="max-width: 220px; font-size: 13px; color: var(--text-secondary);">${escapeHtml(order.address)}</td>
               <td>
-                <select data-order-id="${order.id}">
-                  ${statusValues.map((status) => `<option value="${status}" ${status === order.status ? 'selected' : ''}>${status}</option>`).join('')}
-                </select>
-                <button type="button" class="delete-btn" data-order-id="${order.id}">Delete</button>
+                <span class="order-status">${escapeHtml(order.status || 'Unknown')}</span>
+                ${order.status === pendingConfirmation
+                  ? `<div class="pending-actions">
+                      <button type="button" class="edit-btn" data-order-id="${order.id}">Edit Order</button>
+                      <button type="button" class="confirm-btn" data-order-id="${order.id}">Confirm</button>
+                      <button type="button" class="cancel-btn" data-order-id="${order.id}">Cancel</button>
+                    </div>`
+                  : `<div>
+                      ${['Confirmed', 'Shipped'].includes(order.status)
+                        ? `<select class="status-action" data-order-id="${order.id}" aria-label="Update order ${order.id} status">
+                            ${(order.status === 'Confirmed' ? ['Confirmed', 'Shipped'] : ['Shipped', 'Delivered'])
+                              .map((status) => `<option value="${status}" ${status === order.status ? 'selected' : ''}>${status}</option>`).join('')}
+                          </select>`
+                        : ''}
+                      <button type="button" class="delete-btn" data-order-id="${order.id}">Delete</button>
+                    </div>`}
               </td>
             </tr>
           `).join('');
 
-          rows.querySelectorAll('select').forEach((select) => {
+          rows.querySelectorAll('.pending-quantity').forEach((select) => {
+            select.addEventListener('input', (event) => {
+              const quantity = Number(event.target.value);
+              if (!Number.isInteger(quantity) || quantity < 1) return;
+              const totalCell = rows.querySelector(`.order-total[data-order-id="${event.target.dataset.orderId}"]`);
+              const total = quantity * Number(totalCell.dataset.unitPrice);
+              totalCell.querySelector('.order-total-value').textContent =
+                `Total: ৳${total.toLocaleString('en-BD')}`;
+            });
+          });
+
+          rows.querySelectorAll('.edit-btn').forEach((button) => {
+            button.addEventListener('click', async (event) => {
+              const id = event.currentTarget.dataset.orderId;
+              const quantity = Number(rows.querySelector(`.pending-quantity[data-order-id="${id}"]`).value);
+              try {
+                const response = await fetch(`/api/orders/${id}/quantity`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ quantity }),
+                  cache: 'no-store'
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || 'Order edit failed.');
+                showAdminStatus(`Order #${id} updated. Total: ৳${Number(result.total).toLocaleString('en-BD')}.`);
+                await loadOrders({ silent: true });
+              } catch (error) {
+                console.error('Admin order edit failed:', error);
+                showAdminStatus(error.message || 'Order edit failed. Please try again.', 'error');
+              }
+            });
+          });
+
+          rows.querySelectorAll('.confirm-btn, .cancel-btn').forEach((button) => {
+            button.addEventListener('click', async (event) => {
+              const id = event.currentTarget.dataset.orderId;
+              const isConfirm = event.currentTarget.classList.contains('confirm-btn');
+              const quantitySelect = rows.querySelector(`.pending-quantity[data-order-id="${id}"]`);
+              const action = isConfirm ? 'confirm' : 'cancel';
+              try {
+                const response = await fetch(`/api/orders/${id}/${action}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  ...(isConfirm ? { body: JSON.stringify({ quantity: Number(quantitySelect.value) }) } : {}),
+                  cache: 'no-store'
+                });
+                const result = await response.json();
+                if (!response.ok) throw new Error(result.error || `Order ${action} failed.`);
+                showAdminStatus(isConfirm
+                  ? `Order #${id} confirmed. Total: ৳${Number(result.total).toLocaleString('en-BD')}.`
+                  : `Order #${id} cancelled.`);
+                await loadOrders({ silent: true });
+              } catch (error) {
+                console.error(`Admin order ${action} failed:`, error);
+                showAdminStatus(error.message || `Order ${action} failed. Please try again.`, 'error');
+              }
+            });
+          });
+
+          rows.querySelectorAll('.status-action').forEach((select) => {
             select.addEventListener('change', async (event) => {
               const id = Number(event.target.dataset.orderId);
               const nextStatus = event.target.value;

@@ -29,7 +29,7 @@ class TestOrderStore {
       size: order.size,
       quantity: order.quantity,
       total: order.total,
-      status: 'Pending',
+      status: order.status,
       created_at: new Date().toISOString(),
     });
     return id;
@@ -47,17 +47,18 @@ class TestOrderStore {
     this.orders = this.orders.filter((order) => order.id !== Number(id));
   }
 
-  async clearCancelledOrders() {
-    this.orders = this.orders.filter(
-      (order) => String(order.status).toLowerCase() !== 'cancelled'
-    );
-  }
-
   async updateOrderStatus(id, status) {
     const order = this.orders.find((item) => item.id === Number(id));
     if (order) {
       order.status = status;
     }
+  }
+
+  async updatePendingOrder(id, updates) {
+    const order = this.orders.find((item) => item.id === Number(id));
+    if (!order || order.status !== 'Pending Confirmation') return false;
+    Object.assign(order, updates);
+    return true;
   }
 }
 
@@ -246,7 +247,8 @@ test('customer can place an order and admin can view it', async () => {
     order.customer_name === 'Test User' &&
     order.email === 'customer@example.com' &&
     order.product === 'FC Barcelona 2026 home Jersey' &&
-    order.total === 2398
+    order.total === 2398 &&
+    order.status === 'Pending Confirmation'
   ));
 });
 
@@ -372,39 +374,161 @@ test('orders reject invalid email addresses', async () => {
   assert.match((await response.json()).error, /valid email address/i);
 });
 
-test('cancelled orders are removed immediately and on refresh', async () => {
+test('pending orders can be edited by authenticated staff and totals are recalculated', async () => {
   const port = server.address().port;
-
-  const createResponse = await fetch(`http://localhost:${port}/api/orders`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      customerName: 'Cancel Me',
-      email: 'cancel@example.com',
-      phone: '999',
-      address: 'Cancelled Street',
-      product_id: 'barcelona-home-2026',
-      size: 'M',
-      quantity: 1,
-    }),
+  const createResponse = await submitOrder({
+    customerName: 'Edit Me',
+    email: 'edit@example.com',
+    phone: '999',
+    address: 'Edit Street',
+    product_id: 'barcelona-home-2026',
+    size: 'M',
+    quantity: 2,
   });
-
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
 
-  const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
+  const editResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/quantity`, withAdminAuth({
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'Cancelled' }),
+    body: JSON.stringify({ quantity: 1, total: 1 }),
+  }));
+  assert.equal(editResponse.status, 200);
+  assert.deepEqual(await editResponse.json(), {
+    message: 'Order quantity updated.',
+    quantity: 1,
+    total: 1199,
+  });
+  const savedOrder = orderStore.orders.find((order) => order.id === created.orderId);
+  assert.equal(savedOrder.quantity, 1);
+  assert.equal(savedOrder.total, 1199);
+});
+
+test('pending order edit validates order ID and quantity', async () => {
+  const createResponse = await submitOrder({
+    customerName: 'Invalid Edit',
+    email: 'invalid-edit@example.com',
+    phone: '999',
+    address: 'Edit Street',
+    product_id: 'barcelona-home-2026',
+    size: 'M',
+    quantity: 2,
+  });
+  const created = await createResponse.json();
+  const port = server.address().port;
+
+  const invalidIdResponse = await fetch(`http://localhost:${port}/api/orders/not-an-id/quantity`, withAdminAuth({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 1 }),
+  }));
+  assert.equal(invalidIdResponse.status, 400);
+
+  for (const quantity of [0, -1, 'abc', 1.5, 2147483648]) {
+    const response = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/quantity`, withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity }),
+    }));
+    assert.equal(response.status, 400);
+  }
+
+  const savedOrder = orderStore.orders.find((order) => order.id === created.orderId);
+  assert.equal(savedOrder.quantity, 2);
+  assert.equal(savedOrder.total, 2398);
+});
+
+test('pending order editing and confirmation actions require admin authentication', async () => {
+  const createResponse = await submitOrder({
+    customerName: 'Auth Check',
+    email: 'auth-check@example.com',
+    phone: '999',
+    address: 'Auth Street',
+    product_id: 'barcelona-home-2026',
+    size: 'M',
+    quantity: 1,
+  });
+  const created = await createResponse.json();
+  const port = server.address().port;
+
+  for (const action of ['quantity', 'confirm', 'cancel']) {
+    const response = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/${action}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: 2 }),
+    });
+    assert.equal(response.status, 401);
+  }
+});
+
+test('pending orders can be confirmed with a server-calculated edited quantity', async () => {
+  const createResponse = await submitOrder({
+    customerName: 'Confirm Me',
+    email: 'confirm@example.com',
+    phone: '999',
+    address: 'Confirm Street',
+    product_id: 'barcelona-home-2026',
+    size: 'M',
+    quantity: 1,
+  });
+  const created = await createResponse.json();
+  const port = server.address().port;
+  const response = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/confirm`, withAdminAuth({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 2, total: 1 }),
   }));
 
-  assert.equal(patchResponse.status, 200);
+  assert.equal(response.status, 200);
+  assert.deepEqual(await response.json(), {
+    message: 'Order confirmed.',
+    quantity: 2,
+    total: 2398,
+    status: 'Confirmed',
+  });
+  const savedOrder = orderStore.orders.find((order) => order.id === created.orderId);
+  assert.equal(savedOrder.status, 'Confirmed');
+  assert.equal(savedOrder.quantity, 2);
+  assert.equal(savedOrder.total, 2398);
+
+  const editResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/quantity`, withAdminAuth({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 1 }),
+  }));
+  assert.equal(editResponse.status, 409);
+});
+
+test('pending orders can be cancelled without deleting them', async () => {
+  const createResponse = await submitOrder({
+    customerName: 'Cancel Me',
+    email: 'cancel@example.com',
+    phone: '999',
+    address: 'Cancelled Street',
+    product_id: 'barcelona-home-2026',
+    size: 'M',
+    quantity: 1,
+  });
+  const created = await createResponse.json();
+  const port = server.address().port;
+  const response = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/cancel`, withAdminAuth({
+    method: 'PATCH',
+  }));
+  assert.equal(response.status, 200);
 
   const listResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(listResponse.status, 200);
-
   const refreshedOrders = await listResponse.json();
-  assert.ok(!refreshedOrders.some((order) => order.id === created.orderId));
+  const cancelledOrder = refreshedOrders.find((order) => order.id === created.orderId);
+  assert.ok(cancelledOrder);
+  assert.equal(cancelledOrder.status, 'Cancelled');
+
+  const editResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/quantity`, withAdminAuth({
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 2 }),
+  }));
+  assert.equal(editResponse.status, 409);
 });
 
 test('delete endpoint permanently removes an order from storage', async () => {
@@ -440,7 +564,7 @@ test('delete endpoint permanently removes an order from storage', async () => {
   assert.ok(!refreshedOrders.some((order) => order.id === created.orderId));
 });
 
-test('status updates accept case-insensitive values and remove cancelled orders', async () => {
+test('pending orders cannot bypass confirmation using the generic status endpoint', async () => {
   const port = server.address().port;
 
   const createResponse = await fetch(`http://localhost:${port}/api/orders`, {
@@ -463,15 +587,15 @@ test('status updates accept case-insensitive values and remove cancelled orders'
   const patchResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ status: 'cancelled' }),
+    body: JSON.stringify({ status: 'confirmed' }),
   }));
 
-  assert.equal(patchResponse.status, 200);
+  assert.equal(patchResponse.status, 409);
 
   const listResponse = await fetch(`http://localhost:${port}/api/orders`, withAdminAuth());
   assert.equal(listResponse.status, 200);
   const refreshedOrders = await listResponse.json();
-  assert.ok(!refreshedOrders.some((order) => order.id === created.orderId));
+  assert.equal(refreshedOrders.find((order) => order.id === created.orderId).status, 'Pending Confirmation');
 });
 
 test('products endpoint returns available jerseys and supports search & sport filtering', async () => {

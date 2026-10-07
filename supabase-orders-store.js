@@ -17,8 +17,6 @@ class SupabaseOrdersStore {
 
     this.client = new SupabaseRestClient(supabaseUrl, serviceRoleKey);
     await this.client.request('orders', { query: { select: 'id', limit: '1' } });
-
-    await this.clearCancelledOrders();
   }
 
   getClient() {
@@ -73,6 +71,7 @@ class SupabaseOrdersStore {
         size: order.size,
         quantity: order.quantity,
         total: order.total,
+        status: order.status,
       })),
     });
 
@@ -86,19 +85,27 @@ class SupabaseOrdersStore {
     });
   }
 
-  async clearCancelledOrders() {
-    await this.getClient().request('orders', {
-      method: 'DELETE',
-      query: { status: 'ilike.cancelled' },
-    });
-  }
-
   async updateOrderStatus(id, status) {
     await this.getClient().request('orders', {
       method: 'PATCH',
       query: { id: `eq.${Number(id)}` },
       body: { status },
     });
+  }
+
+  async updatePendingOrder(id, updates) {
+    const data = await this.getClient().request('orders', {
+      method: 'PATCH',
+      query: {
+        id: `eq.${id}`,
+        status: 'eq.Pending Confirmation',
+        select: 'id',
+      },
+      prefer: 'return=representation',
+      body: updates,
+    });
+
+    return Array.isArray(data) && data.length > 0;
   }
 }
 

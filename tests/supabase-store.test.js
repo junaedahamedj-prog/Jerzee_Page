@@ -40,7 +40,7 @@ test.before(async () => {
       }
       const values = JSON.parse(rawBody);
       const inserted = (Array.isArray(values) ? values : [values]).map((value) => {
-        const order = { id: nextId++, status: 'Pending', ...value };
+        const order = { id: nextId++, status: 'Pending Confirmation', ...value };
         orders.push(order);
         return order;
       });
@@ -54,9 +54,17 @@ test.before(async () => {
       }
       const values = JSON.parse(rawBody);
       const id = Number(query.get('id')?.replace('eq.', ''));
+      const status = query.get('status')?.replace('eq.', '');
+      let updated = false;
       orders.forEach((order) => {
-        if (order.id === id) Object.assign(order, values);
+        if (order.id === id && (!status || order.status === status)) {
+          Object.assign(order, values);
+          updated = true;
+        }
       });
+      if (req.headers.prefer?.includes('return=representation')) {
+        return respond(200, updated ? [{ id }] : []);
+      }
       return respond(204, null);
     }
 
@@ -87,7 +95,8 @@ test.after(async () => {
 });
 
 test('Supabase REST store supports order creation, listing, status updates, and deletion', async () => {
-  assert.deepEqual(orders, []);
+  assert.equal(orders.length, 1);
+  assert.equal(orders[0].status, 'Cancelled');
   const orderId = await store.createOrder({
     customerName: 'Supabase Test',
     email: 'customer@example.com',
@@ -102,11 +111,18 @@ test('Supabase REST store supports order creation, listing, status updates, and 
   assert.equal(orderId, 46);
   assert.equal((await store.listOrders())[0].email, 'customer@example.com');
 
+  const pending = await store.listOrders().then((items) => items.find((order) => order.id === orderId));
+  assert.equal(pending.status, 'Pending Confirmation');
+  assert.equal(await store.updatePendingOrder(orderId, { quantity: 2, total: 2400 }), true);
+  assert.equal(await store.updatePendingOrder(orderId, { status: 'Confirmed' }), true);
+  assert.equal(await store.updatePendingOrder(orderId, { quantity: 3 }), false);
+  assert.equal((await store.listOrders()).find((order) => order.id === orderId).total, 2400);
+
   await store.updateOrderStatus(orderId, 'Shipped');
   assert.equal((await store.listOrders())[0].status, 'Shipped');
 
   await store.deleteOrderById(orderId);
-  assert.deepEqual(await store.listOrders(), []);
+  assert.deepEqual(await store.listOrders(), [{ id: 45, status: 'Cancelled' }]);
   assert.ok(requests.every((request) => request.apiKey === 'test-service-role-key'));
 });
 
@@ -146,4 +162,6 @@ test('Supabase REST store creates multiple cart orders in one insert', async () 
     (request) => request.method === 'POST' && request.url.pathname === '/rest/v1/orders'
   );
   assert.equal(insertRequests.length, postRequestCount + 1);
+  assert.ok(orders.filter((order) => order.email === 'cart@example.com')
+    .every((order) => order.status === 'Pending Confirmation'));
 });

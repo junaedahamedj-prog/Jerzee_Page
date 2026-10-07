@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS public.orders (
   size TEXT NOT NULL,
   quantity INTEGER NOT NULL CHECK (quantity > 0),
   total INTEGER NOT NULL CHECK (total > 0),
-  status TEXT NOT NULL DEFAULT 'Pending',
+  status TEXT NOT NULL DEFAULT 'Pending Confirmation',
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
