@@ -312,8 +312,11 @@ function renderProducts() {
       return availability?.inStock === true;
     };
     const selectedSizeIsAvailable = sizeIsAvailable(selectedSize);
+    const selectedAvailability = product.availability?.find((item) => item.size === selectedSize);
     const selectedSizeStatus = availabilityKnown
-      ? selectedSizeIsAvailable ? 'Available' : 'Currently out of stock'
+      ? selectedSizeIsAvailable
+        ? `Jersey available - ${selectedAvailability.availableQuantity}`
+        : 'Currently out of stock'
       : 'Stock status unavailable';
     const availabilityClass = availabilityKnown
       ? selectedSizeIsAvailable ? 'in-stock' : 'out-of-stock'
@@ -391,7 +394,9 @@ function renderProducts() {
       const status = chip.closest('.size-selector').querySelector('.product-availability');
       if (status) {
         status.textContent = availabilityKnown
-          ? isAvailable ? 'Available' : 'Currently out of stock'
+          ? isAvailable
+            ? `Jersey available - ${availability.availableQuantity}`
+            : 'Currently out of stock'
           : 'Stock status unavailable';
         status.classList.toggle('in-stock', availabilityKnown && isAvailable);
         status.classList.toggle('out-of-stock', availabilityKnown && !isAvailable);

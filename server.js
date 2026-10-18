@@ -357,7 +357,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     let products = getProductsCatalog();
     const inventory = await req.app.locals.orderStore.listInventory();
     const availabilityBySize = new Map(
-      inventory.map((row) => [`${row.product_id}:${row.size}`, Number(row.available_quantity) > 0])
+      inventory.map((row) => [`${row.product_id}:${row.size}`, Number(row.available_quantity)])
     );
 
     if (sport && sport !== 'all') {
@@ -382,7 +382,8 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       ...product,
       availability: (product.sizes || []).map((size) => ({
         size,
-        inStock: availabilityBySize.get(`${product.id}:${size}`) === true,
+        availableQuantity: availabilityBySize.get(`${product.id}:${size}`) || 0,
+        inStock: (availabilityBySize.get(`${product.id}:${size}`) || 0) > 0,
       })),
     })));
   });

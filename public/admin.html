@@ -459,25 +459,10 @@
       </div>
     </header>
 
-    <div class="stats-grid">
-      <div class="stat-card">
-        <div class="stat-label">Total Orders</div>
-        <div class="stat-value" id="statTotalOrders">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Pending Confirmation</div>
-        <div class="stat-value" id="statPendingOrders" style="color: var(--accent-lime);">0</div>
-      </div>
-      <div class="stat-card">
-        <div class="stat-label">Recorded Revenue</div>
-        <div class="stat-value" id="statTotalRevenue">৳0</div>
-      </div>
-    </div>
-
     <section class="inventory-section" aria-labelledby="inventoryHeading">
       <div class="inventory-heading">
         <div>
-          <h2 id="inventoryHeading">Stock by Size</h2>
+          <h2 id="inventoryHeading">Stock</h2>
           <p>Counts below are available units after pending orders are reserved.</p>
         </div>
         <div class="inventory-alerts" aria-live="polite">
@@ -495,26 +480,50 @@
       </div>
     </section>
 
-    <div id="adminStatus" style="display:none; margin: 0 0 18px; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(182,255,0,.25); background: rgba(182,255,0,.08); color: var(--accent-lime);"></div>
+    <section class="orders-section" aria-labelledby="ordersHeading">
+      <div class="inventory-heading">
+        <div>
+          <h2 id="ordersHeading">Order Processing</h2>
+          <p>Review orders and manage their confirmation, shipping, and delivery status.</p>
+        </div>
+      </div>
 
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th>ID</th>
-            <th>Customer</th>
-            <th>Phone</th>
-            <th>Product</th>
-            <th>Size</th>
-            <th>Qty</th>
-            <th>Total</th>
-            <th>Address</th>
-            <th>Status / Actions</th>
-          </tr>
-        </thead>
-        <tbody id="rows"></tbody>
-      </table>
-    </div>
+      <div class="stats-grid">
+        <div class="stat-card">
+          <div class="stat-label">Total Orders</div>
+          <div class="stat-value" id="statTotalOrders">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Pending Confirmation</div>
+          <div class="stat-value" id="statPendingOrders" style="color: var(--accent-lime);">0</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Recorded Revenue</div>
+          <div class="stat-value" id="statTotalRevenue">৳0</div>
+        </div>
+      </div>
+
+      <div id="adminStatus" style="display:none; margin: 0 0 18px; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(182,255,0,.25); background: rgba(182,255,0,.08); color: var(--accent-lime);"></div>
+
+      <div class="table-wrapper">
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+              <th>Customer</th>
+              <th>Phone</th>
+              <th>Product</th>
+              <th>Size</th>
+              <th>Qty</th>
+              <th>Total</th>
+              <th>Address</th>
+              <th>Status / Actions</th>
+            </tr>
+          </thead>
+          <tbody id="rows"></tbody>
+        </table>
+      </div>
+    </section>
 
     <dialog id="deleteOrderDialog" class="delete-dialog" aria-labelledby="deleteDialogTitle">
       <div class="delete-dialog-content">

@@ -939,7 +939,8 @@ test('products endpoint returns available jerseys and supports search & sport fi
   assert.ok(searchProducts.some((p) => p.name.includes('Barcelona')));
 });
 
-test('public product availability exposes size status but never exact stock counts', async () => {
+test('public product availability shows the available quantity without internal inventory data', async () => {
+  orderStore.inventory.get('barcelona-home-2026:M').available_quantity = 10;
   const response = await fetch(`http://localhost:${server.address().port}/api/products`);
   assert.equal(response.status, 200);
   const products = await response.json();
@@ -947,6 +948,7 @@ test('public product availability exposes size status but never exact stock coun
 
   assert.deepEqual(product.availability.find((item) => item.size === 'M'), {
     size: 'M',
+    availableQuantity: 10,
     inStock: true,
   });
   assert.equal(JSON.stringify(products).includes('available_quantity'), false);
