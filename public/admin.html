@@ -141,6 +141,36 @@
         font-weight: 800;
         color: #fff;
       }
+      .dashboard-tabs {
+        display: flex;
+        gap: 10px;
+        margin: 0 0 24px;
+        padding-bottom: 12px;
+        border-bottom: 1px solid var(--border);
+      }
+      .dashboard-tab {
+        min-height: 42px;
+        padding: 0 18px;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: #101010;
+        color: var(--text-secondary);
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: background .2s ease, border-color .2s ease, color .2s ease;
+      }
+      .dashboard-tab:hover { color: #fff; border-color: rgba(255, 255, 255, .2); }
+      .dashboard-tab[aria-selected="true"] {
+        border-color: rgba(182, 255, 0, .4);
+        background: rgba(182, 255, 0, .1);
+        color: var(--accent-lime);
+      }
+      .dashboard-tab:focus-visible {
+        outline: 2px solid var(--accent-lime);
+        outline-offset: 3px;
+      }
+      .dashboard-panel[hidden] { display: none !important; }
       .inventory-section { margin-bottom: 28px; }
       .inventory-heading {
         display: flex;
@@ -459,7 +489,15 @@
       </div>
     </header>
 
-    <section class="inventory-section" aria-labelledby="inventoryHeading">
+    <nav class="dashboard-tabs" role="tablist" aria-label="Admin dashboard sections">
+      <button type="button" class="dashboard-tab" id="stockTab" role="tab"
+        aria-controls="stockPanel" aria-selected="true">Stock</button>
+      <button type="button" class="dashboard-tab" id="ordersTab" role="tab"
+        aria-controls="ordersPanel" aria-selected="false" tabindex="-1">Order Processing</button>
+    </nav>
+
+    <section class="dashboard-panel inventory-section" id="stockPanel" role="tabpanel"
+      aria-labelledby="stockTab">
       <div class="inventory-heading">
         <div>
           <h2 id="inventoryHeading">Stock</h2>
@@ -480,7 +518,8 @@
       </div>
     </section>
 
-    <section class="orders-section" aria-labelledby="ordersHeading">
+    <section class="dashboard-panel orders-section" id="ordersPanel" role="tabpanel"
+      aria-labelledby="ordersTab" hidden>
       <div class="inventory-heading">
         <div>
           <h2 id="ordersHeading">Order Processing</h2>
@@ -936,6 +975,32 @@
       }
 
       document.getElementById('refreshBtn').addEventListener('click', loadOrders);
+      const dashboardTabs = [
+        { button: document.getElementById('stockTab'), panel: document.getElementById('stockPanel') },
+        { button: document.getElementById('ordersTab'), panel: document.getElementById('ordersPanel') }
+      ];
+      function activateDashboardTab(activeTab, moveFocus = false) {
+        dashboardTabs.forEach(({ button, panel }) => {
+          const isActive = button === activeTab;
+          button.setAttribute('aria-selected', String(isActive));
+          button.tabIndex = isActive ? 0 : -1;
+          panel.hidden = !isActive;
+        });
+        if (moveFocus) activeTab.focus();
+        dashboardTabs.find(({ button }) => button === activeTab).panel
+          .scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+      dashboardTabs.forEach(({ button }, index) => {
+        button.addEventListener('click', () => activateDashboardTab(button));
+        button.addEventListener('keydown', (event) => {
+          if (!['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) return;
+          event.preventDefault();
+          const nextIndex = event.key === 'Home' ? 0
+            : event.key === 'End' ? dashboardTabs.length - 1
+              : (index + (event.key === 'ArrowRight' ? 1 : dashboardTabs.length - 1)) % dashboardTabs.length;
+          activateDashboardTab(dashboardTabs[nextIndex].button, true);
+        });
+      });
       document.getElementById('cancelDeleteBtn').addEventListener('click', closeDeleteOrderDialog);
       document.getElementById('confirmDeleteBtn').addEventListener('click', deletePendingOrder);
       document.getElementById('deleteOrderDialog').addEventListener('click', (event) => {

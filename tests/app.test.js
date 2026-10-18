@@ -316,7 +316,11 @@ test('admin portal and order management require authentication', async () => {
 
   const authenticatedPortalResponse = await fetch(`http://localhost:${port}/staff`, withAdminAuth());
   assert.equal(authenticatedPortalResponse.status, 200);
-  assert.match(await authenticatedPortalResponse.text(), /JERZEE Operations/);
+  const portalHtml = await authenticatedPortalResponse.text();
+  assert.match(portalHtml, /JERZEE Operations/);
+  assert.match(portalHtml, /id="stockTab" role="tab"\s+aria-controls="stockPanel" aria-selected="true">Stock/);
+  assert.match(portalHtml, /id="ordersTab" role="tab"\s+aria-controls="ordersPanel" aria-selected="false"/);
+  assert.match(portalHtml, /id="ordersPanel" role="tabpanel"[\s\S]*?hidden>/);
 });
 
 test('logout destroys the server session and expires its cookie', async () => {
