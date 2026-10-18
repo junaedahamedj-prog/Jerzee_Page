@@ -23,6 +23,11 @@ class TestOrderStore {
     return [...this.orders].sort((a, b) => b.id - a.id).map((order) => ({ ...order }));
   }
 
+  async getOrderById(id) {
+    const order = this.orders.find((item) => Number(item.id) === Number(id));
+    return order ? { ...order } : null;
+  }
+
   async createOrder(order) {
     const id = this.nextId++;
     this.orders.push({

@@ -29,6 +29,10 @@ test.before(async () => {
       if (query.get('select') === 'id') {
         return respond(200, []);
       }
+      const id = query.get('id')?.replace('eq.', '');
+      if (id) {
+        return respond(200, orders.filter((order) => Number(order.id) === Number(id)).slice(0, 1));
+      }
       const offset = Number(query.get('offset') || 0);
       const limit = Number(query.get('limit') || 1000);
       const rows = [...orders].sort((a, b) => b.id - a.id).slice(offset, offset + limit);
@@ -166,4 +170,23 @@ test('Supabase REST store creates multiple cart orders in one insert', async () 
   assert.equal(insertRequests.length, postRequestCount + 1);
   assert.ok(orders.filter((order) => order.email === 'cart@example.com')
     .every((order) => order.status === 'Pending Confirmation'));
+});
+
+test('Supabase order lookup fetches only the requested order', async () => {
+  orders.push({
+    id: 91,
+    status: 'Confirmed',
+    customer_name: 'Lookup Customer',
+    product: 'Jersey',
+  });
+  const requestCount = requests.length;
+  const order = await store.getOrderById(91);
+  const lookupRequests = requests.slice(requestCount);
+
+  assert.equal(order.id, 91);
+  assert.equal(lookupRequests.length, 1);
+  assert.equal(lookupRequests[0].method, 'GET');
+  assert.equal(lookupRequests[0].url.searchParams.get('id'), 'eq.91');
+  assert.equal(lookupRequests[0].url.searchParams.get('limit'), '1');
+  assert.equal(await store.getOrderById(999), null);
 });

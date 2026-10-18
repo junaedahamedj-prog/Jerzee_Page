@@ -388,7 +388,7 @@
       </div>
       <div class="actions-group">
         <a href="/" class="btn-storefront">← Storefront</a>
-        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 30 sec</span>
+        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 15 sec</span>
         <button type="button" id="refreshBtn">↻ REFRESH</button>
         <button type="button" id="logoutBtn" class="btn-logout">LOG OUT</button>
       </div>
@@ -480,6 +480,25 @@
       let ordersLoadInProgress = false;
       let orderPendingDeletion = null;
       let deleteDialogTrigger = null;
+      let productPricesPromise;
+
+      function getProductPrices() {
+        if (!productPricesPromise) {
+          productPricesPromise = fetch('/api/products', { cache: 'no-store' })
+            .then(async (response) => {
+              const products = await response.json();
+              if (!response.ok) {
+                throw new Error(products.error || `Products API returned ${response.status}`);
+              }
+              return new Map(products.map((product) => [product.name, Number(product.price)]));
+            })
+            .catch((error) => {
+              productPricesPromise = null;
+              throw error;
+            });
+        }
+        return productPricesPromise;
+      }
 
       function openDeleteOrderDialog(order, trigger) {
         const dialog = document.getElementById('deleteOrderDialog');
@@ -529,7 +548,7 @@
           if (!response.ok) throw new Error(result.error || `Delete failed with ${response.status}`);
           closeDeleteOrderDialog();
           showAdminStatus(`Order #${orderId} was deleted permanently.`, 'success');
-          await loadOrders();
+          void loadOrders({ silent: true });
         } catch (error) {
           console.error('Admin delete failed:', error);
           errorElement.textContent = error.message || 'Delete failed. Please try again.';
@@ -554,12 +573,7 @@
             throw new Error(ordersResult.error || `Orders API returned ${response.status}`);
           }
 
-          const productsResponse = await fetch('/api/products', { cache: 'no-store' });
-          const products = await productsResponse.json();
-          if (!productsResponse.ok) {
-            throw new Error(products.error || `Products API returned ${productsResponse.status}`);
-          }
-          const productPrices = new Map(products.map((product) => [product.name, Number(product.price)]));
+          const productPrices = await getProductPrices();
           const orders = ordersResult;
 
           // Update stats
@@ -654,7 +668,7 @@
                 const result = await response.json();
                 if (!response.ok) throw new Error(result.error || 'Order edit failed.');
                 showAdminStatus(`Order #${id} updated. Total: ৳${Number(result.total).toLocaleString('en-BD')}.`);
-                await loadOrders({ silent: true });
+                void loadOrders({ silent: true });
               } catch (error) {
                 console.error('Admin order edit failed:', error);
                 showAdminStatus(error.message || 'Order edit failed. Please try again.', 'error');
@@ -664,10 +678,12 @@
 
           rows.querySelectorAll('.confirm-btn, .cancel-btn').forEach((button) => {
             button.addEventListener('click', async (event) => {
-              const id = event.currentTarget.dataset.orderId;
+              const button = event.currentTarget;
+              const id = button.dataset.orderId;
               const isConfirm = event.currentTarget.classList.contains('confirm-btn');
               const quantitySelect = rows.querySelector(`.pending-quantity[data-order-id="${id}"]`);
               const action = isConfirm ? 'confirm' : 'cancel';
+              button.disabled = true;
               try {
                 const response = await fetch(`/api/orders/${id}/${action}`, {
                   method: 'PATCH',
@@ -680,18 +696,21 @@
                 showAdminStatus(isConfirm
                   ? `Order #${id} confirmed. Total: ৳${Number(result.total).toLocaleString('en-BD')}.`
                   : `Order #${id} cancelled.`);
-                await loadOrders({ silent: true });
+                void loadOrders({ silent: true });
               } catch (error) {
                 console.error(`Admin order ${action} failed:`, error);
                 showAdminStatus(error.message || `Order ${action} failed. Please try again.`, 'error');
+                button.disabled = false;
               }
             });
           });
 
           rows.querySelectorAll('.status-action').forEach((select) => {
             select.addEventListener('change', async (event) => {
-              const id = Number(event.target.dataset.orderId);
-              const nextStatus = event.target.value;
+              const select = event.currentTarget;
+              const id = Number(select.dataset.orderId);
+              const nextStatus = select.value;
+              select.disabled = true;
               try {
                 const response = await fetch(`/api/orders/${id}`, {
                   method: 'PATCH',
@@ -703,10 +722,11 @@
                   throw new Error(`Status update failed with ${response.status}`);
                 }
                 showAdminStatus(`Order #${id} moved to ${nextStatus}.`, 'success');
-                await loadOrders();
+                void loadOrders({ silent: true });
               } catch (error) {
                 console.error('Admin status update failed:', error);
                 showAdminStatus('Status update failed. Please try again.', 'error');
+                select.disabled = false;
               }
             });
           });
@@ -759,7 +779,7 @@
       loadOrders();
       window.setInterval(() => {
         if (!document.hidden) loadOrders({ silent: true });
-      }, 30000);
+      }, 15000);
     </script>
   </body>
 </html>

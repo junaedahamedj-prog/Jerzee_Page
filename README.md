@@ -42,7 +42,7 @@ Open:
 - Private admin portal: http://localhost:3000/staff
 
 ## How it works
-The `/staff` portal is not linked from the storefront. The legacy `/admin.html` route and every order-listing or order-management endpoint require a session created by `/admin/login`; customers can still submit orders publicly. Logout invalidates the server-side session. The admin order list refreshes automatically every 30 seconds while its browser tab is visible; manual refresh remains available. Cart checkout submits all items together and records each product/size as its own order row with the same customer details. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
+The `/staff` portal is not linked from the storefront. The legacy `/admin.html` route and every order-listing or order-management endpoint require a session created by `/admin/login`; customers can still submit orders publicly. Logout invalidates the server-side session. The admin order list refreshes automatically every 15 seconds while its browser tab is visible; manual refresh remains available. Order actions look up only the requested order, and product pricing is loaded once per admin page visit. Cart checkout submits all items together and records each product/size as its own order row with the same customer details. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
 
 Run the automated API tests with:
 

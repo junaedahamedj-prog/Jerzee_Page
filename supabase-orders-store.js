@@ -52,6 +52,17 @@ class SupabaseOrdersStore {
     }
   }
 
+  async getOrderById(id) {
+    const orders = await this.getClient().request('orders', {
+      query: {
+        select: '*',
+        id: `eq.${Number(id)}`,
+        limit: '1',
+      },
+    });
+    return orders[0] || null;
+  }
+
   async createOrder(order) {
     const orderIds = await this.createOrders([order]);
     return orderIds[0];

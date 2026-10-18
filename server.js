@@ -126,6 +126,14 @@ function parseOrderId(value) {
   return Number.isSafeInteger(id) ? id : null;
 }
 
+async function getOrderById(orderStore, id) {
+  if (typeof orderStore.getOrderById === 'function') {
+    return orderStore.getOrderById(id);
+  }
+  const orders = await orderStore.listOrders();
+  return orders.find((item) => Number(item.id) === id) || null;
+}
+
 const productsFilePath = path.join(__dirname, 'data', 'products.json');
 
 function getProductsCatalog() {
@@ -429,8 +437,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Please provide a valid order ID and positive integer quantity.' });
     }
 
-    const orders = await req.app.locals.orderStore.listOrders();
-    const order = orders.find((item) => Number(item.id) === id);
+    const order = await getOrderById(req.app.locals.orderStore, id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
@@ -463,8 +470,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Please provide a valid order ID and positive integer quantity.' });
     }
 
-    const orders = await req.app.locals.orderStore.listOrders();
-    const order = orders.find((item) => Number(item.id) === id);
+    const order = await getOrderById(req.app.locals.orderStore, id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
@@ -503,8 +509,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Please provide a valid order ID.' });
     }
 
-    const orders = await req.app.locals.orderStore.listOrders();
-    const order = orders.find((item) => Number(item.id) === id);
+    const order = await getOrderById(req.app.locals.orderStore, id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
@@ -531,8 +536,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Invalid status.' });
     }
 
-    const order = (await req.app.locals.orderStore.listOrders())
-      .find((item) => Number(item.id) === id);
+    const order = await getOrderById(req.app.locals.orderStore, id);
     if (!order) {
       return res.status(404).json({ error: 'Order not found.' });
     }
