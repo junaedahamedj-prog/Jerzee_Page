@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>JERZEE Admin Login</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Plus Jakarta Sans", Arial, sans-serif;
+        background: #050505;
+        color: #fff;
+      }
+      * { box-sizing: border-box; }
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        padding: 24px;
+      }
+      main {
+        width: min(100%, 420px);
+        padding: 32px;
+        background: #121212;
+        border: 1px solid rgba(255, 255, 255, .1);
+        border-radius: 14px;
+      }
+      h1 { margin: 0 0 8px; letter-spacing: 2px; }
+      p { color: #a0a0a5; font-size: 14px; line-height: 1.6; }
+      label { display: block; margin-top: 18px; font-size: 13px; font-weight: 700; }
+      input {
+        width: 100%;
+        margin-top: 8px;
+        padding: 12px;
+        border: 1px solid #333;
+        border-radius: 7px;
+        background: #090909;
+        color: #fff;
+        font: inherit;
+      }
+      button {
+        width: 100%;
+        margin-top: 24px;
+        padding: 12px;
+        border: 0;
+        border-radius: 7px;
+        background: #b6ff00;
+        color: #000;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      button:disabled { opacity: .65; cursor: wait; }
+      #message { min-height: 22px; margin-top: 14px; color: #ff8a8a; }
+      a { color: #b6ff00; font-size: 13px; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <h1>JERZEE ADMIN</h1>
+      <p>Sign in to manage customer orders.</p>
+      <form id="loginForm">
+        <label for="username">Username</label>
+        <input id="username" name="username" autocomplete="username" required />
+        <label for="password">Password</label>
+        <input id="password" name="password" type="password" autocomplete="current-password" required />
+        <button id="submitButton" type="submit">SIGN IN</button>
+        <div id="message" role="alert" aria-live="polite"></div>
+      </form>
+      <a href="/">Back to storefront</a>
+    </main>
+    <script>
+      document.getElementById('loginForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const button = document.getElementById('submitButton');
+        const message = document.getElementById('message');
+        button.disabled = true;
+        message.textContent = '';
+
+        try {
+          const response = await fetch('/admin/login', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              username: document.getElementById('username').value,
+              password: document.getElementById('password').value
+            }),
+            cache: 'no-store'
+          });
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Sign in failed.');
+          window.location.assign('/staff');
+        } catch (error) {
+          message.textContent = error.message || 'Sign in failed. Please try again.';
+        } finally {
+          button.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

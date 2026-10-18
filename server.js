@@ -3,12 +3,61 @@ require('dotenv').config();
 const express = require('express');
 const fs = require('fs');
 const path = require('path');
-const { createHash, timingSafeEqual } = require('crypto');
+const { createHash, createHmac, randomBytes, timingSafeEqual } = require('crypto');
 const { SupabaseOrdersStore } = require('./supabase-orders-store');
+const { SupabaseSessionStore } = require('./supabase-session-store');
 
 const PORT = Number(process.env.PORT || 3000);
 const HOST = process.env.HOST || '0.0.0.0';
 const MAX_DATABASE_INTEGER = 2147483647;
+const ADMIN_SESSION_COOKIE = 'jerzee_admin_session';
+const ADMIN_SESSION_DURATION_MS = 8 * 60 * 60 * 1000;
+const LOGIN_RATE_WINDOW_MS = 15 * 60 * 1000;
+const LOGIN_RATE_MAX_ATTEMPTS = 5;
+
+function validateEnvironment(env = process.env) {
+  const required = [
+    'SUPABASE_URL',
+    'SUPABASE_SERVICE_ROLE_KEY',
+    'ADMIN_USERNAME',
+    'ADMIN_PASSWORD',
+  ];
+  const missing = required.filter((name) => !String(env[name] || '').trim());
+  if (missing.length) {
+    const error = new Error(`Missing required environment variables: ${missing.join(', ')}`);
+    error.code = 'INVALID_ENVIRONMENT_CONFIGURATION';
+    throw error;
+  }
+
+  let supabaseUrl;
+  try {
+    supabaseUrl = new URL(env.SUPABASE_URL);
+  } catch {
+    const error = new Error('SUPABASE_URL must be a valid URL.');
+    error.code = 'INVALID_ENVIRONMENT_CONFIGURATION';
+    throw error;
+  }
+  if (!['http:', 'https:'].includes(supabaseUrl.protocol) ||
+      (env.NODE_ENV === 'production' && supabaseUrl.protocol !== 'https:')) {
+    const error = new Error('SUPABASE_URL must use HTTPS in production.');
+    error.code = 'INVALID_ENVIRONMENT_CONFIGURATION';
+    throw error;
+  }
+}
+
+function constantTimeStringEqual(supplied, expected) {
+  return timingSafeEqual(
+    createHash('sha256').update(String(supplied)).digest(),
+    createHash('sha256').update(String(expected)).digest()
+  );
+}
+
+function readSessionCookie(req) {
+  const cookieHeader = req.get('Cookie') || '';
+  const cookie = cookieHeader.split(';').map((part) => part.trim())
+    .find((part) => part.startsWith(`${ADMIN_SESSION_COOKIE}=`));
+  return cookie ? cookie.slice(ADMIN_SESSION_COOKIE.length + 1) : '';
+}
 
 function prepareOrderInput(payload = {}, customer = payload, products = getProductsCatalog()) {
   const customerName = String(customer.customerName || '').trim();
@@ -96,41 +145,112 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
   const adminUsername = options.adminUsername ?? process.env.ADMIN_USERNAME;
   const adminPassword = options.adminPassword ?? process.env.ADMIN_PASSWORD;
   const adminConfigured = Boolean(adminUsername && adminPassword);
+  const sessionStore = options.sessionStore ?? new SupabaseSessionStore();
+  const sessionDurationMs = options.sessionDurationMs ?? ADMIN_SESSION_DURATION_MS;
+  const rateLimitOptions = options.loginRateLimit ?? {};
+  const rateLimitWindowMs = rateLimitOptions.windowMs ?? LOGIN_RATE_WINDOW_MS;
+  const rateLimitMaxAttempts = rateLimitOptions.maxAttempts ?? LOGIN_RATE_MAX_ATTEMPTS;
+  const loginAttempts = new Map();
+  const needsSupabaseConfiguration = orderStore instanceof SupabaseOrdersStore;
 
-  function requireAdmin(req, res, next) {
+  function getLoginRateLimitKey(req) {
+    const address = req.ip || req.socket.remoteAddress || 'unknown';
+    return createHmac('sha256', adminPassword).update(address).digest('hex');
+  }
+
+  if (process.env.VERCEL) {
+    app.set('trust proxy', 1);
+  }
+
+  async function initializeSessionStore() {
+    if (!app.locals.sessionStoreReady) {
+      app.locals.sessionStoreReady = Promise.resolve().then(() => sessionStore.initialize());
+    }
+    return app.locals.sessionStoreReady;
+  }
+
+  function setSessionCookie(res, sessionId, maxAgeMs) {
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    res.set('Set-Cookie',
+      `${ADMIN_SESSION_COOKIE}=${sessionId}; Path=/; Max-Age=${Math.floor(maxAgeMs / 1000)}; HttpOnly; SameSite=Strict${secure}`);
+  }
+
+  function clearSessionCookie(res) {
+    const secure = process.env.NODE_ENV === 'production' ? '; Secure' : '';
+    res.set('Set-Cookie',
+      `${ADMIN_SESSION_COOKIE}=; Path=/; Max-Age=0; HttpOnly; SameSite=Strict${secure}`);
+  }
+
+  async function requireAdmin(req, res, next) {
     if (!adminConfigured) {
       return res.status(503).json({ error: 'Admin access is not configured on this server.' });
     }
 
-    const authorization = req.get('Authorization') || '';
-    const match = authorization.match(/^Basic\s+([A-Za-z0-9+/]+=*)$/i);
-    if (!match) {
-      res.set('WWW-Authenticate', 'Basic realm="JERZEE Admin", charset="UTF-8"');
-      return res.status(401).send('Authentication required.');
+    try {
+      await initializeSessionStore();
+      const sessionId = readSessionCookie(req);
+      const session = sessionId ? await sessionStore.get(sessionId) : null;
+      if (!session?.authenticated) {
+        clearSessionCookie(res);
+        if (req.path === '/staff' || req.path === '/admin.html') {
+          return res.redirect(302, '/admin/login');
+        }
+        return res.status(401).json({ error: 'Authentication required.' });
+      }
+      req.adminSessionId = sessionId;
+      next();
+    } catch (error) {
+      next(error);
+    }
+  }
+
+  async function checkLoginRateLimit(req, res) {
+    const now = Date.now();
+    const key = getLoginRateLimitKey(req);
+    if (typeof sessionStore.consumeLoginAttempt === 'function') {
+      const result = await sessionStore.consumeLoginAttempt(
+        key,
+        now,
+        rateLimitWindowMs,
+        rateLimitMaxAttempts
+      );
+      if (!result.allowed) {
+        res.set('Retry-After', String(Math.max(1, result.retry_after_seconds)));
+        res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+        return false;
+      }
+      return true;
     }
 
-    const decoded = Buffer.from(match[1], 'base64').toString('utf8');
-    const separator = decoded.indexOf(':');
-    const suppliedUsername = separator < 0 ? '' : decoded.slice(0, separator);
-    const suppliedPassword = separator < 0 ? '' : decoded.slice(separator + 1);
-    const usernameMatches = timingSafeEqual(
-      createHash('sha256').update(suppliedUsername).digest(),
-      createHash('sha256').update(adminUsername).digest()
-    );
-    const passwordMatches = timingSafeEqual(
-      createHash('sha256').update(suppliedPassword).digest(),
-      createHash('sha256').update(adminPassword).digest()
-    );
+    const recentAttempts = (loginAttempts.get(key) || [])
+      .filter((timestamp) => now - timestamp < rateLimitWindowMs);
 
-    if (separator < 0 || !usernameMatches || !passwordMatches) {
-      res.set('WWW-Authenticate', 'Basic realm="JERZEE Admin", charset="UTF-8"');
-      return res.status(401).send('Authentication required.');
+    if (recentAttempts.length >= rateLimitMaxAttempts) {
+      const retryAfterSeconds = Math.max(1, Math.ceil(
+        (recentAttempts[0] + rateLimitWindowMs - now) / 1000
+      ));
+      res.set('Retry-After', String(retryAfterSeconds));
+      res.status(429).json({ error: 'Too many login attempts. Please try again later.' });
+      return false;
     }
 
-    next();
+    recentAttempts.push(now);
+    if (loginAttempts.size > 10000) {
+      for (const [attemptKey, timestamps] of loginAttempts) {
+        if (!timestamps.some((timestamp) => now - timestamp < rateLimitWindowMs)) {
+          loginAttempts.delete(attemptKey);
+        }
+      }
+    }
+    loginAttempts.set(key, recentAttempts);
+    return true;
   }
 
   app.locals.orderStore = orderStore;
+  app.locals.sessionStore = sessionStore;
+  app.locals.requiresEnvironmentValidation = needsSupabaseConfiguration;
+  app.locals.initializeSessionStore = initializeSessionStore;
+  app.locals.validateEnvironment = validateEnvironment;
   let orderStoreReady;
   app.locals.initializeOrderStore = () => {
     if (!orderStoreReady) {
@@ -140,15 +260,77 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
   };
 
   app.use(express.json({ limit: '1mb' }));
+  app.use((req, res, next) => {
+    if (!needsSupabaseConfiguration) return next();
+    try {
+      validateEnvironment();
+      next();
+    } catch (error) {
+      res.status(503).json({ error: error.message });
+    }
+  });
+
+  app.get('/admin/login', (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, 'public', 'admin-login.html'));
+  });
+  app.post('/admin/login', async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    if (!adminConfigured) {
+      return res.status(503).json({ error: 'Admin access is not configured on this server.' });
+    }
+    try {
+      if (!await checkLoginRateLimit(req, res)) return;
+    } catch (error) {
+      return next(error);
+    }
+
+    const username = typeof req.body?.username === 'string' ? req.body.username : '';
+    const password = typeof req.body?.password === 'string' ? req.body.password : '';
+    if (!constantTimeStringEqual(username, adminUsername) ||
+        !constantTimeStringEqual(password, adminPassword)) {
+      return res.status(401).json({ error: 'Invalid username or password.' });
+    }
+
+    try {
+      await initializeSessionStore();
+      const previousSessionId = readSessionCookie(req);
+      if (previousSessionId) await sessionStore.destroy(previousSessionId);
+
+      const sessionId = randomBytes(32).toString('base64url');
+      await sessionStore.set(sessionId, { authenticated: true }, Date.now() + sessionDurationMs);
+      const rateLimitKey = getLoginRateLimitKey(req);
+      if (typeof sessionStore.resetLoginAttempts === 'function') {
+        await sessionStore.resetLoginAttempts(rateLimitKey);
+      }
+      loginAttempts.delete(rateLimitKey);
+      setSessionCookie(res, sessionId, sessionDurationMs);
+      return res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
+  app.post('/admin/logout', async (req, res, next) => {
+    res.set('Cache-Control', 'no-store');
+    try {
+      const sessionId = readSessionCookie(req);
+      if (sessionId) {
+        await initializeSessionStore();
+        await sessionStore.destroy(sessionId);
+      }
+      clearSessionCookie(res);
+      return res.json({ ok: true });
+    } catch (error) {
+      next(error);
+    }
+  });
   app.get(['/staff', '/admin.html'], requireAdmin, (req, res) => {
     res.set('Cache-Control', 'no-store');
     res.sendFile(path.join(__dirname, 'public', 'admin.html'));
   });
   app.use('/api/orders', (req, res, next) => {
-    if (['GET', 'PATCH', 'DELETE'].includes(req.method)) {
-      return requireAdmin(req, res, next);
-    }
-    next();
+    if (req.method === 'POST') return next();
+    return requireAdmin(req, res, next);
   });
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api/orders', async (req, res, next) => {
@@ -385,11 +567,30 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return next(error);
     }
 
-    console.error('Request failed:', error);
+    console.error('Request failed:', error.code || error.name || 'Error');
     if (error.code === 'SUPABASE_NOT_CONFIGURED') {
       return res.status(503).json({ error: error.message });
     }
-    if (error.code === 'PGRST205' || error.code === '42P01') {
+    if ((error.code === 'PGRST205' || error.code === '42P01') &&
+        error.resource === 'admin_sessions') {
+      return res.status(503).json({
+        error: 'Admin session storage is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if (((error.code === 'PGRST205' || error.code === '42P01') &&
+        error.resource === 'admin_login_attempts') ||
+        (error.code === '42P01' && error.resource === 'rpc/consume_admin_login_attempt')) {
+      return res.status(503).json({
+        error: 'Admin login rate-limit storage is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if (error.code === 'PGRST202' && error.resource === 'rpc/consume_admin_login_attempt') {
+      return res.status(503).json({
+        error: 'Admin login rate limiting is not configured. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if ((error.code === 'PGRST205' || error.code === '42P01') &&
+        error.resource === 'orders') {
       return res.status(503).json({
         error: 'The Supabase orders table is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
       });
@@ -408,7 +609,11 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
 const app = createApp();
 
 async function startServer(port = PORT, host = HOST, serverApp = app) {
+  if (serverApp.locals.requiresEnvironmentValidation) {
+    validateEnvironment();
+  }
   await serverApp.locals.initializeOrderStore();
+  await serverApp.locals.initializeSessionStore();
   return new Promise((resolve, reject) => {
     const server = serverApp.listen(port, host, () => {
       const address = server.address();
@@ -427,9 +632,13 @@ async function startServer(port = PORT, host = HOST, serverApp = app) {
 
 if (require.main === module) {
   startServer().catch((error) => {
-    console.error('Failed to start JERZEE:', error.message);
+    const safeMessage = error.code === 'INVALID_ENVIRONMENT_CONFIGURATION' ||
+      error.code === 'SUPABASE_NOT_CONFIGURED'
+      ? error.message
+      : 'Supabase initialization failed. Check connectivity and verify supabase/schema.sql is installed.';
+    console.error('Failed to start JERZEE:', safeMessage);
     process.exitCode = 1;
   });
 }
 
-module.exports = Object.assign(app, { app, createApp, startServer });
+module.exports = Object.assign(app, { app, createApp, startServer, validateEnvironment });

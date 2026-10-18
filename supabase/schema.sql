@@ -15,6 +15,79 @@ CREATE TABLE IF NOT EXISTS public.orders (
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.orders TO service_role;
 
+CREATE TABLE IF NOT EXISTS public.admin_sessions (
+  id TEXT PRIMARY KEY,
+  session_data JSONB NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS admin_sessions_expires_at_idx
+  ON public.admin_sessions (expires_at);
+
+ALTER TABLE public.admin_sessions ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.admin_sessions TO service_role;
+
+CREATE TABLE IF NOT EXISTS public.admin_login_attempts (
+  key TEXT PRIMARY KEY,
+  window_started_at TIMESTAMPTZ NOT NULL,
+  attempts INTEGER NOT NULL CHECK (attempts > 0)
+);
+
+CREATE INDEX IF NOT EXISTS admin_login_attempts_window_started_at_idx
+  ON public.admin_login_attempts (window_started_at);
+
+ALTER TABLE public.admin_login_attempts ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.admin_login_attempts TO service_role;
+
+CREATE OR REPLACE FUNCTION public.consume_admin_login_attempt(
+  p_key TEXT,
+  p_now TIMESTAMPTZ,
+  p_window_seconds INTEGER,
+  p_max_attempts INTEGER
+)
+RETURNS TABLE (allowed BOOLEAN, retry_after_seconds INTEGER)
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_window_started_at TIMESTAMPTZ;
+  v_attempts INTEGER;
+BEGIN
+  INSERT INTO public.admin_login_attempts AS login_attempts (key, window_started_at, attempts)
+  VALUES (p_key, p_now, 1)
+  ON CONFLICT (key) DO UPDATE SET
+    window_started_at = CASE
+      WHEN login_attempts.window_started_at <= p_now - make_interval(secs => p_window_seconds)
+        THEN p_now
+      ELSE login_attempts.window_started_at
+    END,
+    attempts = CASE
+      WHEN login_attempts.window_started_at <= p_now - make_interval(secs => p_window_seconds)
+        THEN 1
+      ELSE login_attempts.attempts + 1
+    END
+  RETURNING window_started_at, attempts INTO v_window_started_at, v_attempts;
+
+  DELETE FROM public.admin_login_attempts
+  WHERE window_started_at < p_now - INTERVAL '1 day';
+
+  RETURN QUERY SELECT
+    v_attempts <= p_max_attempts,
+    GREATEST(
+      1,
+      CEIL(EXTRACT(EPOCH FROM (
+        v_window_started_at + make_interval(secs => p_window_seconds) - p_now
+      )))::INTEGER
+    );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.consume_admin_login_attempt(TEXT, TIMESTAMPTZ, INTEGER, INTEGER)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.consume_admin_login_attempt(TEXT, TIMESTAMPTZ, INTEGER, INTEGER)
+  TO service_role;
+
 CREATE OR REPLACE FUNCTION public.sync_orders_id_sequence()
 RETURNS VOID
 LANGUAGE SQL

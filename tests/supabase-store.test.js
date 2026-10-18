@@ -1,6 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
 const http = require('node:http');
+const { randomBytes } = require('node:crypto');
 const { SupabaseOrdersStore } = require('../supabase-orders-store');
 
 let remoteServer;
@@ -8,6 +9,7 @@ let store;
 let orders;
 let requests;
 let nextId;
+const testServiceRoleKey = randomBytes(32).toString('hex');
 
 test.before(async () => {
   orders = [{ id: 45, status: 'Cancelled' }];
@@ -83,7 +85,7 @@ test.before(async () => {
 
   await new Promise((resolve) => remoteServer.listen(0, '127.0.0.1', resolve));
   process.env.SUPABASE_URL = `http://127.0.0.1:${remoteServer.address().port}`;
-  process.env.SUPABASE_SERVICE_ROLE_KEY = 'test-service-role-key';
+  process.env.SUPABASE_SERVICE_ROLE_KEY = testServiceRoleKey;
   store = new SupabaseOrdersStore();
   await store.initialize();
 });
@@ -123,7 +125,7 @@ test('Supabase REST store supports order creation, listing, status updates, and 
 
   await store.deleteOrderById(orderId);
   assert.deepEqual(await store.listOrders(), [{ id: 45, status: 'Cancelled' }]);
-  assert.ok(requests.every((request) => request.apiKey === 'test-service-role-key'));
+  assert.ok(requests.every((request) => request.apiKey === testServiceRoleKey));
 });
 
 test('Supabase REST store creates multiple cart orders in one insert', async () => {

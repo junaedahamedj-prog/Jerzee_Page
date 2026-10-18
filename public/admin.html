@@ -83,6 +83,16 @@
         text-decoration: none;
         transition: all 0.2s ease;
       }
+      .btn-logout {
+        background: transparent;
+        color: #ff8a8a;
+        border: 1px solid rgba(255, 82, 82, 0.3);
+        padding: 10px 16px;
+        border-radius: 8px;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+      }
       .btn-storefront:hover {
         color: #fff;
         border-color: #fff;
@@ -278,6 +288,7 @@
         <a href="/" class="btn-storefront">← Storefront</a>
         <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 30 sec</span>
         <button type="button" id="refreshBtn">↻ REFRESH</button>
+        <button type="button" id="logoutBtn" class="btn-logout">LOG OUT</button>
       </div>
     </header>
 
@@ -350,6 +361,10 @@
 
         try {
           const response = await fetch('/api/orders', { cache: 'no-store' });
+          if (response.status === 401) {
+            window.location.assign('/admin/login');
+            return;
+          }
           const ordersResult = await response.json();
           if (!response.ok) {
             throw new Error(ordersResult.error || `Orders API returned ${response.status}`);
@@ -554,6 +569,13 @@
       }
 
       document.getElementById('refreshBtn').addEventListener('click', loadOrders);
+      document.getElementById('logoutBtn').addEventListener('click', async () => {
+        try {
+          await fetch('/admin/logout', { method: 'POST', cache: 'no-store' });
+        } finally {
+          window.location.assign('/admin/login');
+        }
+      });
       loadOrders();
       window.setInterval(() => {
         if (!document.hidden) loadOrders({ silent: true });

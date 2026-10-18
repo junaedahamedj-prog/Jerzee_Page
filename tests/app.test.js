@@ -1,9 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createApp, startServer } = require('../server');
+const { randomBytes } = require('node:crypto');
+const { createApp, startServer, validateEnvironment } = require('../server');
 
 let server;
 let orderStore;
+let sessionStore;
+let adminCookie;
+const testAdminUsername = randomBytes(8).toString('hex');
+const testAdminPassword = randomBytes(32).toString('hex');
+const wrongPassword = randomBytes(32).toString('hex');
 
 class TestOrderStore {
   constructor() {
@@ -62,13 +68,51 @@ class TestOrderStore {
   }
 }
 
+class TestSessionStore {
+  constructor() {
+    this.sessions = new Map();
+  }
+
+  async initialize() {}
+
+  async get(id) {
+    const session = this.sessions.get(id);
+    if (!session || session.expiresAt <= Date.now()) {
+      this.sessions.delete(id);
+      return null;
+    }
+    return session.data;
+  }
+
+  async set(id, data, expiresAt) {
+    this.sessions.set(id, { data, expiresAt });
+  }
+
+  async destroy(id) {
+    this.sessions.delete(id);
+  }
+}
+
 test.before(async () => {
   orderStore = new TestOrderStore();
+  sessionStore = new TestSessionStore();
   server = await startServer(
     0,
     '127.0.0.1',
-    createApp(orderStore, { adminUsername: 'test-admin', adminPassword: 'test-password' })
+    createApp(orderStore, {
+      adminUsername: testAdminUsername,
+      adminPassword: testAdminPassword,
+      sessionStore,
+    })
   );
+
+  const response = await fetch(`http://localhost:${server.address().port}/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+  });
+  assert.equal(response.status, 200);
+  adminCookie = response.headers.get('set-cookie').split(';')[0];
 });
 
 test.after(async () => {
@@ -82,7 +126,7 @@ function withAdminAuth(options = {}) {
     ...options,
     headers: {
       ...options.headers,
-      Authorization: `Basic ${Buffer.from('test-admin:test-password').toString('base64')}`,
+      Cookie: adminCookie,
     },
   };
 }
@@ -95,30 +139,194 @@ async function submitOrder(payload) {
   });
 }
 
+test('admin login accepts valid credentials and returns only an opaque session cookie', async () => {
+  const port = server.address().port;
+  const response = await fetch(`http://localhost:${port}/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+  });
+  const result = await response.json();
+  const setCookie = response.headers.get('set-cookie');
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(result, { ok: true });
+  assert.match(setCookie, /^jerzee_admin_session=[A-Za-z0-9_-]+;/);
+  assert.match(setCookie, /HttpOnly/);
+  assert.match(setCookie, /SameSite=Strict/);
+  assert.equal(JSON.stringify(result).includes(testAdminUsername), false);
+  assert.equal(JSON.stringify(result).includes(testAdminPassword), false);
+  assert.notEqual(setCookie.split(';')[0], adminCookie);
+});
+
+test('admin login rejects invalid credentials without creating a session', async () => {
+  const response = await fetch(`http://localhost:${server.address().port}/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testAdminUsername, password: wrongPassword }),
+  });
+
+  assert.equal(response.status, 401);
+  assert.deepEqual(await response.json(), { error: 'Invalid username or password.' });
+  assert.equal(response.headers.get('set-cookie'), null);
+});
+
+test('admin session cookies are marked Secure in production', async () => {
+  const originalNodeEnv = process.env.NODE_ENV;
+  process.env.NODE_ENV = 'production';
+  try {
+    const response = await fetch(`http://localhost:${server.address().port}/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+    });
+    assert.equal(response.status, 200);
+    assert.match(response.headers.get('set-cookie'), /; Secure(?:;|$)/);
+  } finally {
+    if (originalNodeEnv === undefined) {
+      delete process.env.NODE_ENV;
+    } else {
+      process.env.NODE_ENV = originalNodeEnv;
+    }
+  }
+});
+
 test('admin portal and order management require authentication', async () => {
   const port = server.address().port;
 
-  const portalResponse = await fetch(`http://localhost:${port}/staff`);
-  assert.equal(portalResponse.status, 401);
-  assert.match(portalResponse.headers.get('www-authenticate'), /Basic/);
+  const portalResponse = await fetch(`http://localhost:${port}/staff`, { redirect: 'manual' });
+  assert.equal(portalResponse.status, 302);
+  assert.equal(portalResponse.headers.get('location'), '/admin/login');
 
-  const oldPortalResponse = await fetch(`http://localhost:${port}/admin.html`);
-  assert.equal(oldPortalResponse.status, 401);
+  const oldPortalResponse = await fetch(`http://localhost:${port}/admin.html`, { redirect: 'manual' });
+  assert.equal(oldPortalResponse.status, 302);
 
   const ordersResponse = await fetch(`http://localhost:${port}/api/orders`);
   assert.equal(ordersResponse.status, 401);
 
-  const deleteResponse = await fetch(`http://localhost:${port}/api/orders/1`, {
-    method: 'DELETE',
-  });
-  assert.equal(deleteResponse.status, 401);
+  for (const [url, method] of [
+    ['/api/orders', 'PATCH'],
+    ['/api/orders/1/quantity', 'PATCH'],
+    ['/api/orders/1/confirm', 'PATCH'],
+    ['/api/orders/1/cancel', 'PATCH'],
+    ['/api/orders/1', 'PATCH'],
+    ['/api/orders/1', 'DELETE'],
+  ]) {
+    const response = await fetch(`http://localhost:${port}${url}`, { method });
+    assert.equal(response.status, 401, `${method} ${url} should require a session`);
+  }
 
-  const authenticatedPortalResponse = await fetch(
-    `http://localhost:${port}/staff`,
-    withAdminAuth()
-  );
+  const authenticatedPortalResponse = await fetch(`http://localhost:${port}/staff`, withAdminAuth());
   assert.equal(authenticatedPortalResponse.status, 200);
   assert.match(await authenticatedPortalResponse.text(), /JERZEE Operations/);
+});
+
+test('logout destroys the server session and expires its cookie', async () => {
+  const port = server.address().port;
+  const loginResponse = await fetch(`http://localhost:${port}/admin/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+  });
+  const cookie = loginResponse.headers.get('set-cookie').split(';')[0];
+  const logoutResponse = await fetch(`http://localhost:${port}/admin/logout`, {
+    method: 'POST',
+    headers: { Cookie: cookie },
+  });
+
+  assert.equal(logoutResponse.status, 200);
+  assert.match(logoutResponse.headers.get('set-cookie'), /Max-Age=0/);
+  const protectedResponse = await fetch(`http://localhost:${port}/api/orders`, {
+    headers: { Cookie: cookie },
+  });
+  assert.equal(protectedResponse.status, 401);
+});
+
+test('expired admin sessions no longer authorize protected routes', async () => {
+  const expiredSessionStore = new TestSessionStore();
+  const expiredServer = await startServer(0, '127.0.0.1', createApp(new TestOrderStore(), {
+    adminUsername: testAdminUsername,
+    adminPassword: testAdminPassword,
+    sessionStore: expiredSessionStore,
+    sessionDurationMs: 20,
+  }));
+
+  try {
+    const loginResponse = await fetch(`http://localhost:${expiredServer.address().port}/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+    });
+    const cookie = loginResponse.headers.get('set-cookie').split(';')[0];
+    await new Promise((resolve) => setTimeout(resolve, 30));
+    const protectedResponse = await fetch(`http://localhost:${expiredServer.address().port}/api/orders`, {
+      headers: { Cookie: cookie },
+    });
+    assert.equal(protectedResponse.status, 401);
+  } finally {
+    await new Promise((resolve, reject) => expiredServer.close((error) =>
+      error ? reject(error) : resolve()
+    ));
+  }
+});
+
+test('admin login rate limiting rejects attempts after the configured threshold', async () => {
+  const limitedServer = await startServer(0, '127.0.0.1', createApp(new TestOrderStore(), {
+    adminUsername: testAdminUsername,
+    adminPassword: testAdminPassword,
+    sessionStore: new TestSessionStore(),
+    loginRateLimit: { maxAttempts: 2, windowMs: 60000 },
+  }));
+
+  try {
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      const response = await fetch(`http://localhost:${limitedServer.address().port}/admin/login`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: randomBytes(8).toString('hex'), password: wrongPassword }),
+      });
+      assert.equal(response.status, 401);
+    }
+    const limitedResponse = await fetch(`http://localhost:${limitedServer.address().port}/admin/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username: testAdminUsername, password: testAdminPassword }),
+    });
+    assert.equal(limitedResponse.status, 429);
+    assert.ok(Number(limitedResponse.headers.get('retry-after')) > 0);
+  } finally {
+    await new Promise((resolve, reject) => limitedServer.close((error) =>
+      error ? reject(error) : resolve()
+    ));
+  }
+});
+
+test('required environment validation reports missing variable names without values', () => {
+  const privateServiceKey = randomBytes(32).toString('hex');
+  assert.throws(
+    () => validateEnvironment({
+      SUPABASE_URL: 'https://example-project.supabase.co',
+      SUPABASE_SERVICE_ROLE_KEY: privateServiceKey,
+      ADMIN_USERNAME: testAdminUsername,
+    }),
+    (error) => {
+      assert.match(error.message, /ADMIN_PASSWORD/);
+      assert.equal(error.message.includes(privateServiceKey), false);
+      assert.equal(error.message.includes(testAdminUsername), false);
+      return true;
+    }
+  );
+});
+
+test('public responses never include admin credentials or Supabase service-role secrets', async () => {
+  const response = await fetch(`http://localhost:${server.address().port}/api/products`);
+  const responseText = await response.text();
+  assert.equal(response.status, 200);
+  assert.doesNotMatch(responseText, /SUPABASE_SERVICE_ROLE_KEY|ADMIN_PASSWORD/);
+  assert.equal(responseText.includes(testAdminPassword), false);
+  if (process.env.SUPABASE_SERVICE_ROLE_KEY) {
+    assert.equal(responseText.includes(process.env.SUPABASE_SERVICE_ROLE_KEY), false);
+  }
 });
 
 test('order total is calculated from the trusted product price and quantity', async () => {

@@ -46,6 +46,7 @@ class SupabaseRestClient {
       const error = new Error(message);
       error.status = response.status;
       error.code = typeof data === 'object' ? data?.code : undefined;
+      error.resource = resource;
       throw error;
     }
 
