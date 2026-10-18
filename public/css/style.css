@@ -985,6 +985,7 @@ button, input, select, textarea {
 
 .product-availability.in-stock { color: var(--accent-lime); }
 .product-availability.out-of-stock { color: #ff8a8a; }
+.product-availability.unavailable { color: #ffd166; }
 
 /* Bottom Price & Action Row */
 .product-footer {

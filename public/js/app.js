@@ -25,12 +25,12 @@ const AVAILABLE_SPORTS = [
 // Fallback products catalog if API is offline or during initial render
 const FALLBACK_PRODUCTS = [
   {
-    id: 'barcelona-away-2026',
-    name: 'FC Barcelona 2026 Away Jersey',
+    id: 'barcelona-home-2026',
+    name: 'FC Barcelona 2026 home Jersey',
     sport: 'Football',
     sportKey: 'football',
-    price: 1200,
-    image: '/images/products/barcelona.jpg',
+    price: 1199,
+    image: '/images/products/barcalona.jpg',
     badge: 'Bestseller',
     description: 'Blaugrana heritage with engineered vapor-weave micro-mesh for peak match performance.',
     featured: true,
@@ -41,22 +41,22 @@ const FALLBACK_PRODUCTS = [
     name: 'Real Madrid 2026 Away Jersey',
     sport: 'Football',
     sportKey: 'football',
-    price: 1200,
-    image: '/images/products/real-madrid.jpg',
+    price: 1199,
+    image: '/images/products/realmadrid.jpg',
     badge: 'Top Pick',
     description: 'Sophisticated obsidian black away edition with metallic gold trim and aeroready comfort.',
     featured: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL']
   },
   {
-    id: 'bangladesh-cricket-2026',
-    name: 'Bangladesh National Cricket Jersey 2026',
-    sport: 'Cricket',
-    sportKey: 'cricket',
+    id: 'Ac-Milan-2026',
+    name: 'Ac Milan home kit 2026',
+    sport: 'Football',
+    sportKey: 'football',
     price: 1150,
-    image: '/images/products/bangladesh-cricket.jpg',
+    image: '/images/products/acmilan.jpg',
     badge: 'National Pride',
-    description: 'Official Bengal Tiger edition with breathable moisture-control weave and athletic ribbed polo collar.',
+    description: 'A classic Rossoneri design featuring the iconic red-and-black stripes. Lightweight, comfortable, and perfect for match days, training, or everyday football style.',
     featured: true,
     sizes: ['S', 'M', 'L', 'XL', 'XXL']
   },
@@ -66,7 +66,7 @@ const FALLBACK_PRODUCTS = [
     sport: 'F1 / Racing',
     sportKey: 'racing',
     price: 1350,
-    image: '/images/products/red-bull-f1.jpg',
+    image: '/images/products/redbull.jpg',
     badge: 'F1 Official',
     description: 'High-octane motorsport crew kit with aerodynamic raglan sleeves and ergonomic side panels.',
     featured: true,
@@ -78,7 +78,7 @@ const FALLBACK_PRODUCTS = [
     sport: 'F1 / Racing',
     sportKey: 'racing',
     price: 1350,
-    image: '/images/products/ferrari-f1.svg',
+    image: '/images/products/ferrari.jpg',
     badge: 'Speed Icon',
     description: 'Iconic Rosso Corsa red racing silhouette with carbon-styled side panels and gold-piped accents.',
     featured: true,
@@ -89,8 +89,8 @@ const FALLBACK_PRODUCTS = [
     name: 'Bangladesh National Football Kit 2026',
     sport: 'Football',
     sportKey: 'football',
-    price: 1100,
-    image: '/images/products/bangladesh-football.svg',
+    price: 999,
+    image: '/images/products/bangladeshhome.jpg',
     badge: 'New Season',
     description: 'Vibrant forest green match kit featuring dynamic scarlet chest disc and athletic flex hem.',
     featured: true,
@@ -306,11 +306,18 @@ function renderProducts() {
   grid.innerHTML = filtered.map(product => {
     const selectedSize = AppState.selectedSizes[product.id] || 'M';
     const sizes = product.sizes || ['S', 'M', 'L', 'XL', 'XXL'];
+    const availabilityKnown = Array.isArray(product.availability);
     const sizeIsAvailable = (size) => {
       const availability = product.availability?.find((item) => item.size === size);
-      return availability ? availability.inStock : true;
+      return availability?.inStock === true;
     };
     const selectedSizeIsAvailable = sizeIsAvailable(selectedSize);
+    const selectedSizeStatus = availabilityKnown
+      ? selectedSizeIsAvailable ? 'Available' : 'Currently out of stock'
+      : 'Stock status unavailable';
+    const availabilityClass = availabilityKnown
+      ? selectedSizeIsAvailable ? 'in-stock' : 'out-of-stock'
+      : 'unavailable';
 
     return `
       <article class="product-card" data-product-id="${product.id}">
@@ -331,14 +338,14 @@ function renderProducts() {
             </div>
             <div class="size-chips" data-product-id="${product.id}">
               ${sizes.map(size => `
-                <button type="button" class="size-chip ${size === selectedSize ? 'selected' : ''} ${sizeIsAvailable(size) ? '' : 'sold-out'}"
-                  data-size="${size}" ${sizeIsAvailable(size) ? '' : 'disabled aria-label="' + size + ', out of stock"'}>
+                <button type="button" class="size-chip ${size === selectedSize ? 'selected' : ''} ${availabilityKnown && !sizeIsAvailable(size) ? 'sold-out' : ''}"
+                  data-size="${size}" ${availabilityKnown && !sizeIsAvailable(size) ? 'disabled aria-label="' + size + ', out of stock"' : ''}>
                   ${size}
                 </button>
               `).join('')}
             </div>
-            <p class="product-availability ${selectedSizeIsAvailable ? 'in-stock' : 'out-of-stock'}"
-              aria-live="polite">${selectedSizeIsAvailable ? 'Available' : 'Currently out of stock'}</p>
+            <p class="product-availability ${availabilityClass}"
+              aria-live="polite">${selectedSizeStatus}</p>
           </div>
 
           <div class="product-footer">
@@ -346,7 +353,7 @@ function renderProducts() {
               <span class="currency">৳</span>${Number(product.price).toLocaleString('en-BD')}
             </div>
             <div class="product-card-actions">
-              <button type="button" class="btn-card-cart" data-action="cart" data-id="${product.id}" title="Add to Cart" ${selectedSizeIsAvailable ? '' : 'disabled'}>
+              <button type="button" class="btn-card-cart" data-action="cart" data-id="${product.id}" title="Add to Cart" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
                   <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -354,7 +361,7 @@ function renderProducts() {
                 </svg>
                 <span>Add</span>
               </button>
-              <button type="button" class="btn-card-order" data-action="order" data-id="${product.id}" ${selectedSizeIsAvailable ? '' : 'disabled'}>
+              <button type="button" class="btn-card-order" data-action="order" data-id="${product.id}" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
                 Order
               </button>
             </div>
@@ -379,15 +386,19 @@ function renderProducts() {
       if (labelValue) labelValue.textContent = size;
       const product = AppState.products.find((item) => item.id === productId);
       const availability = product?.availability?.find((item) => item.size === size);
-      const isAvailable = availability ? availability.inStock : true;
+      const availabilityKnown = Array.isArray(product?.availability);
+      const isAvailable = availability?.inStock === true;
       const status = chip.closest('.size-selector').querySelector('.product-availability');
       if (status) {
-        status.textContent = isAvailable ? 'Available' : 'Currently out of stock';
-        status.classList.toggle('in-stock', isAvailable);
-        status.classList.toggle('out-of-stock', !isAvailable);
+        status.textContent = availabilityKnown
+          ? isAvailable ? 'Available' : 'Currently out of stock'
+          : 'Stock status unavailable';
+        status.classList.toggle('in-stock', availabilityKnown && isAvailable);
+        status.classList.toggle('out-of-stock', availabilityKnown && !isAvailable);
+        status.classList.toggle('unavailable', !availabilityKnown);
       }
       grid.querySelectorAll(`[data-action][data-id="${CSS.escape(productId)}"]`)
-        .forEach((button) => { button.disabled = !isAvailable; });
+        .forEach((button) => { button.disabled = !availabilityKnown || !isAvailable; });
     });
   });
 
