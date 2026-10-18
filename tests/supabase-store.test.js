@@ -8,12 +8,14 @@ let remoteServer;
 let store;
 let orders;
 let requests;
+let requestBodies;
 let nextId;
 const testServiceRoleKey = randomBytes(32).toString('hex');
 
 test.before(async () => {
   orders = [{ id: 45, status: 'Cancelled' }];
   requests = [];
+  requestBodies = [];
   nextId = 46;
   remoteServer = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
@@ -37,6 +39,41 @@ test.before(async () => {
       const limit = Number(query.get('limit') || 1000);
       const rows = [...orders].sort((a, b) => b.id - a.id).slice(offset, offset + limit);
       return respond(200, rows);
+    }
+
+    if (url.pathname === '/rest/v1/inventory_stock' && req.method === 'GET') {
+      return respond(200, [{
+        product_id: 'barcelona-home-2026',
+        size: 'M',
+        available_quantity: 4,
+        low_stock_threshold: 5,
+      }]);
+    }
+
+    if (url.pathname.startsWith('/rest/v1/rpc/') && req.method === 'POST') {
+      let rawBody = '';
+      for await (const chunk of req) {
+        rawBody += chunk;
+      }
+      const body = JSON.parse(rawBody);
+      requestBodies.push({ resource: url.pathname.slice('/rest/v1/'.length), body });
+      if (url.pathname.endsWith('/create_inventory_orders')) {
+        return respond(200, { orderIds: [201, 202] });
+      }
+      if (url.pathname.endsWith('/update_pending_inventory_order')) {
+        return respond(200, { updated: true });
+      }
+      if (url.pathname.endsWith('/cancel_pending_inventory_order')) {
+        return respond(200, { updated: true });
+      }
+      if (url.pathname.endsWith('/set_inventory_stock')) {
+        return respond(200, {
+          product_id: body.p_product_id,
+          size: body.p_size,
+          available_quantity: body.p_quantity,
+          low_stock_threshold: 5,
+        });
+      }
     }
 
     if (url.pathname === '/rest/v1/orders' && req.method === 'POST') {
@@ -189,4 +226,54 @@ test('Supabase order lookup fetches only the requested order', async () => {
   assert.equal(lookupRequests[0].url.searchParams.get('id'), 'eq.91');
   assert.equal(lookupRequests[0].url.searchParams.get('limit'), '1');
   assert.equal(await store.getOrderById(999), null);
+});
+
+test('Supabase inventory adapter reads stock and calls inventory transaction RPCs', async () => {
+  const inventory = await store.listInventory();
+  assert.equal(inventory[0].available_quantity, 4);
+
+  const stock = await store.setInventoryStock('barcelona-home-2026', 'M', 9);
+  assert.equal(stock.available_quantity, 9);
+
+  const orderIds = await store.createInventoryOrders({
+    customerName: 'Inventory Customer',
+    email: 'inventory@example.com',
+    phone: '123456789',
+    address: 'Inventory Street',
+  }, [{
+    productId: 'barcelona-home-2026',
+    product: 'Barcelona Jersey',
+    size: 'M',
+    quantity: 2,
+    total: 2398,
+  }]);
+  assert.deepEqual(orderIds, [201, 202]);
+
+  assert.deepEqual(await store.updatePendingInventoryOrder(
+    12,
+    { quantity: 3, total: 3597, status: 'Confirmed' },
+    'barcelona-home-2026'
+  ), { updated: true });
+  assert.deepEqual(await store.cancelPendingInventoryOrder(12), { updated: true });
+
+  const calls = requestBodies.slice(-4);
+  assert.deepEqual(calls.map((call) => call.resource), [
+    'rpc/set_inventory_stock',
+    'rpc/create_inventory_orders',
+    'rpc/update_pending_inventory_order',
+    'rpc/cancel_pending_inventory_order',
+  ]);
+  assert.deepEqual(calls[0].body, {
+    p_product_id: 'barcelona-home-2026',
+    p_size: 'M',
+    p_quantity: 9,
+  });
+  assert.deepEqual(calls[2].body, {
+    p_order_id: 12,
+    p_quantity: 3,
+    p_total: 3597,
+    p_product_id: 'barcelona-home-2026',
+    p_target_status: 'Confirmed',
+  });
+  assert.deepEqual(calls[3].body, { p_order_id: 12 });
 });

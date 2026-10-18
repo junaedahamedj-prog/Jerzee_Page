@@ -306,6 +306,11 @@ function renderProducts() {
   grid.innerHTML = filtered.map(product => {
     const selectedSize = AppState.selectedSizes[product.id] || 'M';
     const sizes = product.sizes || ['S', 'M', 'L', 'XL', 'XXL'];
+    const sizeIsAvailable = (size) => {
+      const availability = product.availability?.find((item) => item.size === size);
+      return availability ? availability.inStock : true;
+    };
+    const selectedSizeIsAvailable = sizeIsAvailable(selectedSize);
 
     return `
       <article class="product-card" data-product-id="${product.id}">
@@ -326,11 +331,14 @@ function renderProducts() {
             </div>
             <div class="size-chips" data-product-id="${product.id}">
               ${sizes.map(size => `
-                <button type="button" class="size-chip ${size === selectedSize ? 'selected' : ''}" data-size="${size}">
+                <button type="button" class="size-chip ${size === selectedSize ? 'selected' : ''} ${sizeIsAvailable(size) ? '' : 'sold-out'}"
+                  data-size="${size}" ${sizeIsAvailable(size) ? '' : 'disabled aria-label="' + size + ', out of stock"'}>
                   ${size}
                 </button>
               `).join('')}
             </div>
+            <p class="product-availability ${selectedSizeIsAvailable ? 'in-stock' : 'out-of-stock'}"
+              aria-live="polite">${selectedSizeIsAvailable ? 'Available' : 'Currently out of stock'}</p>
           </div>
 
           <div class="product-footer">
@@ -338,7 +346,7 @@ function renderProducts() {
               <span class="currency">৳</span>${Number(product.price).toLocaleString('en-BD')}
             </div>
             <div class="product-card-actions">
-              <button type="button" class="btn-card-cart" data-action="cart" data-id="${product.id}" title="Add to Cart">
+              <button type="button" class="btn-card-cart" data-action="cart" data-id="${product.id}" title="Add to Cart" ${selectedSizeIsAvailable ? '' : 'disabled'}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
                   <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -346,7 +354,7 @@ function renderProducts() {
                 </svg>
                 <span>Add</span>
               </button>
-              <button type="button" class="btn-card-order" data-action="order" data-id="${product.id}">
+              <button type="button" class="btn-card-order" data-action="order" data-id="${product.id}" ${selectedSizeIsAvailable ? '' : 'disabled'}>
                 Order
               </button>
             </div>
@@ -369,6 +377,17 @@ function renderProducts() {
 
       const labelValue = chip.closest('.size-selector').querySelector('.size-label .accent-lime');
       if (labelValue) labelValue.textContent = size;
+      const product = AppState.products.find((item) => item.id === productId);
+      const availability = product?.availability?.find((item) => item.size === size);
+      const isAvailable = availability ? availability.inStock : true;
+      const status = chip.closest('.size-selector').querySelector('.product-availability');
+      if (status) {
+        status.textContent = isAvailable ? 'Available' : 'Currently out of stock';
+        status.classList.toggle('in-stock', isAvailable);
+        status.classList.toggle('out-of-stock', !isAvailable);
+      }
+      grid.querySelectorAll(`[data-action][data-id="${CSS.escape(productId)}"]`)
+        .forEach((button) => { button.disabled = !isAvailable; });
     });
   });
 
@@ -766,6 +785,9 @@ async function handleOrderSubmit(e) {
       if (formMsg) {
         formMsg.textContent = result.error || 'Failed to place order. Please review your details.';
         formMsg.className = 'error';
+      }
+      if (response.status === 409) {
+        await fetchProducts();
       }
       submitBtn.disabled = false;
       submitBtn.textContent = 'Place Order →';

@@ -15,6 +15,17 @@ class TestOrderStore {
   constructor() {
     this.orders = [];
     this.nextId = 1;
+    this.inventory = new Map();
+    for (const product of require('../data/products.json')) {
+      for (const size of product.sizes) {
+        this.inventory.set(`${product.id}:${size}`, {
+          product_id: product.id,
+          size,
+          available_quantity: 50,
+          low_stock_threshold: 5,
+        });
+      }
+    }
   }
 
   async initialize() {}
@@ -26,6 +37,88 @@ class TestOrderStore {
   async getOrderById(id) {
     const order = this.orders.find((item) => Number(item.id) === Number(id));
     return order ? { ...order } : null;
+  }
+
+  async listInventory() {
+    return [...this.inventory.values()].map((row) => ({ ...row }));
+  }
+
+  async setInventoryStock(productId, size, quantity) {
+    const stock = this.inventory.get(`${productId}:${size}`);
+    if (!stock) return null;
+    stock.available_quantity = quantity;
+    return { ...stock };
+  }
+
+  async createInventoryOrders(customer, orders) {
+    const requested = new Map();
+    orders.forEach((order) => {
+      const key = `${order.productId}:${order.size}`;
+      requested.set(key, (requested.get(key) || 0) + order.quantity);
+    });
+    for (const [key, quantity] of requested) {
+      const stock = this.inventory.get(key);
+      if (!stock || stock.available_quantity < quantity) {
+        const error = new Error('OUT_OF_STOCK');
+        error.code = 'P0001';
+        throw error;
+      }
+    }
+    for (const [key, quantity] of requested) {
+      this.inventory.get(key).available_quantity -= quantity;
+    }
+    const ids = [];
+    for (const order of orders) {
+      const id = this.nextId++;
+      this.orders.push({
+        id,
+        customer_name: customer.customerName,
+        email: customer.email,
+        phone: customer.phone,
+        address: customer.address,
+        product: order.product,
+        product_id: order.productId,
+        size: order.size,
+        quantity: order.quantity,
+        total: order.total,
+        status: order.status,
+        stock_reserved: true,
+        created_at: new Date().toISOString(),
+      });
+      ids.push(id);
+    }
+    return ids;
+  }
+
+  async updatePendingInventoryOrder(id, updates, productId) {
+    const order = this.orders.find((item) => item.id === Number(id));
+    if (!order || order.status !== 'Pending Confirmation') return { updated: false };
+    const key = `${productId}:${order.size}`;
+    const stock = this.inventory.get(key);
+    const delta = order.stock_reserved ? updates.quantity - order.quantity : updates.quantity;
+    if (!stock || (delta > 0 && stock.available_quantity < delta)) {
+      const error = new Error('OUT_OF_STOCK');
+      error.code = 'P0001';
+      throw error;
+    }
+    stock.available_quantity -= delta;
+    order.quantity = updates.quantity;
+    order.total = updates.total;
+    order.product_id = productId;
+    order.stock_reserved = true;
+    order.status = updates.status || 'Pending Confirmation';
+    return { updated: true };
+  }
+
+  async cancelPendingInventoryOrder(id) {
+    const order = this.orders.find((item) => item.id === Number(id));
+    if (!order || order.status !== 'Pending Confirmation') return { updated: false };
+    if (order.stock_reserved) {
+      this.inventory.get(`${order.product_id}:${order.size}`).available_quantity += order.quantity;
+    }
+    order.status = 'Cancelled';
+    order.stock_reserved = false;
+    return { updated: true };
   }
 
   async createOrder(order) {
@@ -724,6 +817,11 @@ test('pending orders can be cancelled without deleting them', async () => {
   });
   const created = await createResponse.json();
   const port = server.address().port;
+  const deletePendingResponse = await fetch(
+    `http://localhost:${port}/api/orders/${created.orderId}`,
+    withAdminAuth({ method: 'DELETE' })
+  );
+  assert.equal(deletePendingResponse.status, 409);
   const response = await fetch(`http://localhost:${port}/api/orders/${created.orderId}/cancel`, withAdminAuth({
     method: 'PATCH',
   }));
@@ -763,6 +861,11 @@ test('delete endpoint permanently removes an order from storage', async () => {
 
   assert.equal(createResponse.status, 201);
   const created = await createResponse.json();
+  const confirmResponse = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${created.orderId}/confirm`,
+    withAdminAuth({ method: 'PATCH' })
+  );
+  assert.equal(confirmResponse.status, 200);
 
   const deleteResponse = await fetch(`http://localhost:${port}/api/orders/${created.orderId}`, withAdminAuth({
     method: 'DELETE',
@@ -834,4 +937,184 @@ test('products endpoint returns available jerseys and supports search & sport fi
   const searchProducts = await searchResponse.json();
   assert.ok(searchProducts.length > 0);
   assert.ok(searchProducts.some((p) => p.name.includes('Barcelona')));
+});
+
+test('public product availability exposes size status but never exact stock counts', async () => {
+  const response = await fetch(`http://localhost:${server.address().port}/api/products`);
+  assert.equal(response.status, 200);
+  const products = await response.json();
+  const product = products.find((item) => item.id === 'barcelona-home-2026');
+
+  assert.deepEqual(product.availability.find((item) => item.size === 'M'), {
+    size: 'M',
+    inStock: true,
+  });
+  assert.equal(JSON.stringify(products).includes('available_quantity'), false);
+  assert.equal(JSON.stringify(products).includes('low_stock_threshold'), false);
+});
+
+test('inventory listing and stock updates require admin authentication', async () => {
+  const port = server.address().port;
+  assert.equal((await fetch(`http://localhost:${port}/api/inventory`)).status, 401);
+  assert.equal((await fetch(`http://localhost:${port}/api/inventory/barcelona-home-2026/M`, {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ quantity: 3 }),
+  })).status, 401);
+
+  const invalidResponse = await fetch(
+    `http://localhost:${port}/api/inventory/barcelona-home-2026/M`,
+    withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: -1 }),
+    })
+  );
+  assert.equal(invalidResponse.status, 400);
+
+  const updateResponse = await fetch(
+    `http://localhost:${port}/api/inventory/barcelona-home-2026/M`,
+    withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: 7 }),
+    })
+  );
+  assert.equal(updateResponse.status, 200);
+  assert.equal((await updateResponse.json()).stock.available_quantity, 7);
+});
+
+test('checkout reserves stock once and confirmation does not deduct it again', async () => {
+  const stock = orderStore.inventory.get('barcelona-home-2026:XXL');
+  stock.available_quantity = 3;
+  const response = await submitOrder({
+    customerName: 'Stock Purchase',
+    email: 'stock-purchase@example.com',
+    phone: '123456789',
+    address: 'Stock Street',
+    product_id: 'barcelona-home-2026',
+    size: 'XXL',
+    quantity: 2,
+  });
+
+  assert.equal(response.status, 201);
+  const { orderId } = await response.json();
+  assert.equal(stock.available_quantity, 1);
+
+  const confirmResponse = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/confirm`,
+    withAdminAuth({ method: 'PATCH' })
+  );
+  assert.equal(confirmResponse.status, 200);
+  assert.equal(stock.available_quantity, 1);
+  const repeatedConfirm = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/confirm`,
+    withAdminAuth({ method: 'PATCH' })
+  );
+  assert.equal(repeatedConfirm.status, 409);
+  assert.equal(stock.available_quantity, 1);
+});
+
+test('out-of-stock, insufficient, and invalid-size orders are rejected', async () => {
+  const stock = orderStore.inventory.get('real-madrid-away-2026:S');
+  stock.available_quantity = 1;
+  const makePayload = (email, quantity, size = 'S') => ({
+    customerName: 'Stock Validation',
+    email,
+    phone: '123456789',
+    address: 'Stock Street',
+    product_id: 'real-madrid-away-2026',
+    size,
+    quantity,
+  });
+
+  assert.equal((await submitOrder(makePayload('insufficient-stock@example.com', 2))).status, 409);
+  assert.equal((await submitOrder(makePayload('available-stock@example.com', 1))).status, 201);
+  assert.equal(stock.available_quantity, 0);
+  assert.equal((await submitOrder(makePayload('out-of-stock@example.com', 1))).status, 409);
+  assert.equal((await submitOrder(makePayload('invalid-size@example.com', 1, 'XXXL'))).status, 400);
+});
+
+test('concurrent buyers cannot reserve the same final unit', async () => {
+  const stock = orderStore.inventory.get('Ac-Milan-2026:XL');
+  stock.available_quantity = 1;
+  const makePayload = (email) => ({
+    customerName: 'Concurrent Stock',
+    email,
+    phone: '123456789',
+    address: 'Stock Street',
+    product_id: 'Ac-Milan-2026',
+    size: 'XL',
+    quantity: 1,
+  });
+
+  const responses = await Promise.all([
+    submitOrder(makePayload('concurrent-one@example.com')),
+    submitOrder(makePayload('concurrent-two@example.com')),
+  ]);
+  assert.deepEqual(responses.map((response) => response.status).sort(), [201, 409]);
+  assert.equal(stock.available_quantity, 0);
+});
+
+test('pending order quantity edits adjust stock by delta and cancellation restores it only once', async () => {
+  const stock = orderStore.inventory.get('ferrari-racing-2026:L');
+  stock.available_quantity = 10;
+  const createResponse = await submitOrder({
+    customerName: 'Stock Edit',
+    email: 'stock-edit@example.com',
+    phone: '123456789',
+    address: 'Stock Street',
+    product_id: 'ferrari-racing-2026',
+    size: 'L',
+    quantity: 2,
+  });
+  assert.equal(createResponse.status, 201);
+  const { orderId } = await createResponse.json();
+  assert.equal(stock.available_quantity, 8);
+
+  const editResponse = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/quantity`,
+    withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: 4 }),
+    })
+  );
+  assert.equal(editResponse.status, 200);
+  assert.equal(stock.available_quantity, 6);
+
+  const reduceResponse = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/quantity`,
+    withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: 1 }),
+    })
+  );
+  assert.equal(reduceResponse.status, 200);
+  assert.equal(stock.available_quantity, 9);
+  const insufficientEdit = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/quantity`,
+    withAdminAuth({
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ quantity: 20 }),
+    })
+  );
+  assert.equal(insufficientEdit.status, 409);
+  assert.equal(stock.available_quantity, 9);
+  assert.equal(orderStore.orders.find((order) => order.id === orderId).quantity, 1);
+
+  const cancelResponse = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/cancel`,
+    withAdminAuth({ method: 'PATCH' })
+  );
+  assert.equal(cancelResponse.status, 200);
+  assert.equal(stock.available_quantity, 10);
+  const repeatCancel = await fetch(
+    `http://localhost:${server.address().port}/api/orders/${orderId}/cancel`,
+    withAdminAuth({ method: 'PATCH' })
+  );
+  assert.equal(repeatCancel.status, 409);
+  assert.equal(stock.available_quantity, 10);
 });

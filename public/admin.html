@@ -141,6 +141,71 @@
         font-weight: 800;
         color: #fff;
       }
+      .inventory-section { margin-bottom: 28px; }
+      .inventory-heading {
+        display: flex;
+        justify-content: space-between;
+        align-items: end;
+        gap: 16px;
+        margin-bottom: 14px;
+      }
+      .inventory-heading h2 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 22px;
+        font-weight: 800;
+      }
+      .inventory-heading p {
+        margin-top: 4px;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+      .inventory-alerts {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+      }
+      .inventory-alert {
+        padding: 6px 10px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        color: var(--text-secondary);
+        font-size: 11px;
+        font-weight: 800;
+      }
+      .inventory-alert.low { color: #ffd166; border-color: rgba(255, 209, 102, .3); }
+      .inventory-alert.empty { color: #ff8a8a; border-color: rgba(255, 82, 82, .3); }
+      .inventory-table-wrapper {
+        overflow-x: auto;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .inventory-table { min-width: 600px; }
+      .inventory-table th, .inventory-table td { padding: 11px 14px; }
+      .stock-input {
+        width: 92px;
+        padding: 8px 10px;
+        background: #090909;
+        color: #fff;
+        border: 1px solid #333;
+        border-radius: 6px;
+      }
+      .stock-input:focus { outline: 1px solid var(--accent-lime); }
+      .stock-state { font-size: 11px; font-weight: 800; }
+      .stock-state.available { color: var(--accent-lime); }
+      .stock-state.low { color: #ffd166; }
+      .stock-state.empty { color: #ff8a8a; }
+      .stock-save-btn {
+        padding: 8px 12px;
+        border: 1px solid rgba(182, 255, 0, .3);
+        border-radius: 6px;
+        color: var(--accent-lime);
+        background: rgba(182, 255, 0, .08);
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .stock-save-btn:disabled { opacity: .6; cursor: wait; }
       .table-wrapper {
         background: var(--bg-card);
         border: 1px solid var(--border);
@@ -409,6 +474,27 @@
       </div>
     </div>
 
+    <section class="inventory-section" aria-labelledby="inventoryHeading">
+      <div class="inventory-heading">
+        <div>
+          <h2 id="inventoryHeading">Stock by Size</h2>
+          <p>Counts below are available units after pending orders are reserved.</p>
+        </div>
+        <div class="inventory-alerts" aria-live="polite">
+          <span id="lowStockCount" class="inventory-alert low">0 low</span>
+          <span id="outOfStockCount" class="inventory-alert empty">0 out of stock</span>
+        </div>
+      </div>
+      <div class="inventory-table-wrapper">
+        <table class="inventory-table">
+          <thead>
+            <tr><th>Product</th><th>Size</th><th>Available units</th><th>Status</th><th>Update</th></tr>
+          </thead>
+          <tbody id="inventoryRows"></tbody>
+        </table>
+      </div>
+    </section>
+
     <div id="adminStatus" style="display:none; margin: 0 0 18px; padding: 12px 14px; border-radius: 8px; font-size: 13px; font-weight: 700; border: 1px solid rgba(182,255,0,.25); background: rgba(182,255,0,.08); color: var(--accent-lime);"></div>
 
     <div class="table-wrapper">
@@ -478,6 +564,7 @@
       }
 
       let ordersLoadInProgress = false;
+      let inventoryUpdateInProgress = false;
       let orderPendingDeletion = null;
       let deleteDialogTrigger = null;
       let productPricesPromise;
@@ -563,8 +650,11 @@
         if (refreshBtn) refreshBtn.disabled = true;
 
         try {
-          const response = await fetch('/api/orders', { cache: 'no-store' });
-          if (response.status === 401) {
+          const [response, inventoryResponse] = await Promise.all([
+            fetch('/api/orders', { cache: 'no-store' }),
+            fetch('/api/inventory', { cache: 'no-store' })
+          ]);
+          if (response.status === 401 || inventoryResponse.status === 401) {
             window.location.assign('/admin/login');
             return;
           }
@@ -572,9 +662,88 @@
           if (!response.ok) {
             throw new Error(ordersResult.error || `Orders API returned ${response.status}`);
           }
+          const inventoryResult = await inventoryResponse.json();
+          if (!inventoryResponse.ok) {
+            throw new Error(inventoryResult.error || `Inventory API returned ${inventoryResponse.status}`);
+          }
 
           const productPrices = await getProductPrices();
           const orders = ordersResult;
+          const inventory = inventoryResult;
+          const lowStockItems = inventory.filter((item) =>
+            Number(item.available_quantity) > 0 &&
+            Number(item.available_quantity) <= Number(item.low_stock_threshold)
+          );
+          const outOfStockItems = inventory.filter((item) => Number(item.available_quantity) === 0);
+          document.getElementById('lowStockCount').textContent = `${lowStockItems.length} low`;
+          document.getElementById('outOfStockCount').textContent = `${outOfStockItems.length} out of stock`;
+          document.getElementById('inventoryRows').innerHTML = inventory.map((item) => {
+            const available = Number(item.available_quantity);
+            const threshold = Number(item.low_stock_threshold);
+            const state = available === 0 ? 'empty' : available <= threshold ? 'low' : 'available';
+            const label = available === 0 ? 'Out of stock' : state === 'low' ? 'Low stock' : 'In stock';
+            return `
+              <tr>
+                <td><strong>${escapeHtml(item.product_name)}</strong></td>
+                <td>${escapeHtml(item.size)}</td>
+                <td>
+                  <input class="stock-input" type="number" min="0" step="1"
+                    value="${available}" aria-label="Available stock for ${escapeHtml(item.product_name)} size ${escapeHtml(item.size)}"
+                    data-product-id="${escapeHtml(item.product_id)}" data-size="${escapeHtml(item.size)}" />
+                </td>
+                <td><span class="stock-state ${state}">${label}</span></td>
+                <td>
+                  <button class="stock-save-btn" type="button"
+                    data-product-id="${escapeHtml(item.product_id)}" data-size="${escapeHtml(item.size)}">
+                    Save stock
+                  </button>
+                </td>
+              </tr>
+            `;
+          }).join('');
+          document.querySelectorAll('.stock-save-btn').forEach((button) => {
+            button.addEventListener('click', async (event) => {
+              if (inventoryUpdateInProgress) return;
+              const saveButton = event.currentTarget;
+              const { productId, size } = saveButton.dataset;
+              const input = document.querySelector(
+                `.stock-input[data-product-id="${CSS.escape(productId)}"][data-size="${CSS.escape(size)}"]`
+              );
+              const quantity = Number(input.value);
+              if (!Number.isInteger(quantity) || quantity < 0 || quantity > 2147483647) {
+                showAdminStatus('Enter a valid non-negative whole-number stock quantity.', 'error');
+                return;
+              }
+
+              inventoryUpdateInProgress = true;
+              saveButton.disabled = true;
+              try {
+                const updateResponse = await fetch(
+                  `/api/inventory/${encodeURIComponent(productId)}/${encodeURIComponent(size)}`,
+                  {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ quantity }),
+                    cache: 'no-store'
+                  }
+                );
+                const result = await updateResponse.json();
+                if (updateResponse.status === 401) {
+                  window.location.assign('/admin/login');
+                  return;
+                }
+                if (!updateResponse.ok) throw new Error(result.error || 'Stock update failed.');
+                showAdminStatus(`Available stock updated for ${result.stock.product_id} (${size}).`);
+                void loadOrders({ silent: true });
+              } catch (error) {
+                console.error('Inventory update failed:', error);
+                showAdminStatus(error.message || 'Stock update failed. Please try again.', 'error');
+                saveButton.disabled = false;
+              } finally {
+                inventoryUpdateInProgress = false;
+              }
+            });
+          });
 
           // Update stats
           const totalOrders = orders.length;

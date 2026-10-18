@@ -89,6 +89,7 @@ function prepareOrderInput(payload = {}, customer = payload, products = getProdu
 
   return {
     order: {
+      productId: product.id,
       customerName,
       email,
       phone,
@@ -340,6 +341,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     if (req.method === 'POST') return next();
     return requireAdmin(req, res, next);
   });
+  app.use('/api/inventory', requireAdmin);
   app.use(express.static(path.join(__dirname, 'public')));
   app.use('/api/orders', async (req, res, next) => {
     try {
@@ -350,9 +352,13 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     }
   });
 
-  app.get('/api/products', (req, res) => {
+  app.get('/api/products', async (req, res) => {
     const { sport, q } = req.query;
     let products = getProductsCatalog();
+    const inventory = await req.app.locals.orderStore.listInventory();
+    const availabilityBySize = new Map(
+      inventory.map((row) => [`${row.product_id}:${row.size}`, Number(row.available_quantity) > 0])
+    );
 
     if (sport && sport !== 'all') {
       const targetSport = String(sport).trim().toLowerCase();
@@ -371,7 +377,43 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       );
     }
 
-    res.json(products);
+    res.set('Cache-Control', 'no-store');
+    res.json(products.map((product) => ({
+      ...product,
+      availability: (product.sizes || []).map((size) => ({
+        size,
+        inStock: availabilityBySize.get(`${product.id}:${size}`) === true,
+      })),
+    })));
+  });
+
+  app.get('/api/inventory', async (req, res) => {
+    const products = getProductsCatalog();
+    const productById = new Map(products.map((product) => [product.id, product]));
+    const inventory = await req.app.locals.orderStore.listInventory();
+    res.set('Cache-Control', 'no-store');
+    res.json(inventory.map((stock) => ({
+      ...stock,
+      product_name: productById.get(stock.product_id)?.name || 'Unknown product',
+    })));
+  });
+
+  app.patch('/api/inventory/:productId/:size', async (req, res) => {
+    const { productId, size } = req.params;
+    const product = getProductsCatalog().find((item) => item.id === productId);
+    const quantity = req.body?.quantity;
+    if (!product || !Array.isArray(product.sizes) || !product.sizes.includes(size)) {
+      return res.status(404).json({ error: 'Unknown product or size.' });
+    }
+    if (!Number.isInteger(quantity) || quantity < 0 || quantity > MAX_DATABASE_INTEGER) {
+      return res.status(400).json({ error: 'Stock quantity must be a non-negative integer.' });
+    }
+
+    const updated = await req.app.locals.orderStore.setInventoryStock(productId, size, quantity);
+    if (!updated) {
+      return res.status(404).json({ error: 'Inventory has not been initialized for this product and size.' });
+    }
+    return res.json({ message: 'Stock updated.', stock: updated });
   });
 
   app.get('/api/orders', async (req, res) => {
@@ -411,7 +453,10 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       }
 
       const orderItems = preparedItems.map((item) => item.order);
-      const orderIds = await req.app.locals.orderStore.createOrders(orderItems);
+      const orderIds = await req.app.locals.orderStore.createInventoryOrders(
+        { customerName, email, phone, address },
+        orderItems
+      );
       return res.status(201).json({
         message: 'All items ordered successfully!',
         orderIds,
@@ -423,9 +468,15 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: preparedOrder.error });
     }
 
-    const orderId = await req.app.locals.orderStore.createOrder({
-      ...preparedOrder.order,
-    });
+    const [orderId] = await req.app.locals.orderStore.createInventoryOrders(
+      {
+        customerName: preparedOrder.order.customerName,
+        email,
+        phone: preparedOrder.order.phone,
+        address: preparedOrder.order.address,
+      },
+      [preparedOrder.order]
+    );
 
     return res.status(201).json({ message: 'Order placed successfully!', orderId });
   });
@@ -454,8 +505,12 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Product price is unavailable.' });
     }
 
-    const updated = await req.app.locals.orderStore.updatePendingOrder(id, { quantity, total });
-    if (!updated) {
+    const result = await req.app.locals.orderStore.updatePendingInventoryOrder(
+      id,
+      { quantity, total },
+      product.id
+    );
+    if (!result.updated) {
       return res.status(409).json({ error: 'Only pending confirmation orders can be edited.' });
     }
 
@@ -491,12 +546,12 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(400).json({ error: 'Product price is unavailable.' });
     }
 
-    const updated = await req.app.locals.orderStore.updatePendingOrder(id, {
-      quantity,
-      total,
-      status: 'Confirmed',
-    });
-    if (!updated) {
+    const result = await req.app.locals.orderStore.updatePendingInventoryOrder(
+      id,
+      { quantity, total, status: 'Confirmed' },
+      product.id
+    );
+    if (!result.updated) {
       return res.status(409).json({ error: 'Only pending confirmation orders can be confirmed.' });
     }
 
@@ -517,8 +572,8 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       return res.status(409).json({ error: 'Only pending confirmation orders can be cancelled.' });
     }
 
-    const updated = await req.app.locals.orderStore.updatePendingOrder(id, { status: 'Cancelled' });
-    if (!updated) {
+    const result = await req.app.locals.orderStore.cancelPendingInventoryOrder(id);
+    if (!result.updated) {
       return res.status(409).json({ error: 'Only pending confirmation orders can be cancelled.' });
     }
 
@@ -562,6 +617,15 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     if (!id) {
       return res.status(400).json({ error: 'Please provide a valid order ID.' });
     }
+    const order = await getOrderById(req.app.locals.orderStore, id);
+    if (!order) {
+      return res.status(404).json({ error: 'Order not found.' });
+    }
+    if (order.status === PENDING_CONFIRMATION) {
+      return res.status(409).json({
+        error: 'Cancel this pending order to release its reserved stock; order history is preserved.',
+      });
+    }
     await req.app.locals.orderStore.deleteOrderById(id);
     return res.json({ message: 'Order deleted.' });
   });
@@ -572,6 +636,12 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     }
 
     console.error('Request failed:', error.code || error.name || 'Error');
+    if (error.code === 'P0001' && error.message === 'OUT_OF_STOCK') {
+      return res.status(409).json({ error: 'The requested size no longer has enough stock.' });
+    }
+    if (error.code === 'P0001' && error.message === 'INVENTORY_NOT_CONFIGURED') {
+      return res.status(503).json({ error: 'Inventory is not initialized. Run supabase/schema.sql in the Supabase SQL Editor.' });
+    }
     if (error.code === 'SUPABASE_NOT_CONFIGURED') {
       return res.status(503).json({ error: error.message });
     }
@@ -597,6 +667,21 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
         error.resource === 'orders') {
       return res.status(503).json({
         error: 'The Supabase orders table is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if ((error.code === 'PGRST205' || error.code === '42P01') &&
+        (error.resource === 'inventory_stock' ||
+          ['rpc/create_inventory_orders', 'rpc/update_pending_inventory_order',
+            'rpc/cancel_pending_inventory_order', 'rpc/set_inventory_stock'].includes(error.resource))) {
+      return res.status(503).json({
+        error: 'The Supabase inventory table is missing. Run supabase/schema.sql in the Supabase SQL Editor.',
+      });
+    }
+    if (error.code === 'PGRST202' &&
+        ['rpc/create_inventory_orders', 'rpc/update_pending_inventory_order',
+          'rpc/cancel_pending_inventory_order', 'rpc/set_inventory_stock'].includes(error.resource)) {
+      return res.status(503).json({
+        error: 'Inventory database functions are missing. Run supabase/schema.sql in the Supabase SQL Editor.',
       });
     }
     if (error.status === 401 || error.status === 403) {

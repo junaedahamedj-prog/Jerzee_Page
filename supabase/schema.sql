@@ -15,6 +15,288 @@ CREATE TABLE IF NOT EXISTS public.orders (
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 GRANT ALL ON TABLE public.orders TO service_role;
 
+ALTER TABLE public.orders
+  ADD COLUMN IF NOT EXISTS product_id TEXT,
+  ADD COLUMN IF NOT EXISTS stock_reserved BOOLEAN NOT NULL DEFAULT FALSE;
+
+CREATE TABLE IF NOT EXISTS public.inventory_stock (
+  product_id TEXT NOT NULL,
+  size TEXT NOT NULL CHECK (size IN ('S', 'M', 'L', 'XL', 'XXL')),
+  available_quantity INTEGER NOT NULL DEFAULT 0 CHECK (available_quantity >= 0),
+  low_stock_threshold INTEGER NOT NULL DEFAULT 5 CHECK (low_stock_threshold >= 0),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  PRIMARY KEY (product_id, size)
+);
+
+ALTER TABLE public.inventory_stock ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.inventory_stock TO service_role;
+
+INSERT INTO public.inventory_stock (product_id, size, available_quantity)
+SELECT product.id, sizes.size, 0
+FROM (VALUES
+  ('barcelona-home-2026'),
+  ('real-madrid-away-2026'),
+  ('Ac-Milan-2026'),
+  ('red-bull-racing-2026'),
+  ('ferrari-racing-2026'),
+  ('bangladesh-football-2026')
+) AS product(id)
+CROSS JOIN unnest(ARRAY['S', 'M', 'L', 'XL', 'XXL']) AS sizes(size)
+ON CONFLICT (product_id, size) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.create_inventory_orders(
+  p_customer_name TEXT,
+  p_email TEXT,
+  p_phone TEXT,
+  p_address TEXT,
+  p_items JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_item JSONB;
+  v_stock RECORD;
+  v_order_id BIGINT;
+  v_order_ids BIGINT[] := ARRAY[]::BIGINT[];
+  v_updated_count INTEGER;
+BEGIN
+  IF jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) < 1 THEN
+    RAISE EXCEPTION 'At least one order item is required.' USING ERRCODE = '22023';
+  END IF;
+
+  FOR v_stock IN
+    SELECT
+      requested.product_id,
+      requested.size,
+      SUM(requested.quantity)::INTEGER AS quantity
+    FROM (
+      SELECT
+        item->>'productId' AS product_id,
+        item->>'size' AS size,
+        (item->>'quantity')::INTEGER AS quantity
+      FROM jsonb_array_elements(p_items) AS item
+    ) AS requested
+    GROUP BY requested.product_id, requested.size
+    ORDER BY requested.product_id, requested.size
+  LOOP
+    UPDATE public.inventory_stock
+    SET available_quantity = available_quantity - v_stock.quantity,
+        updated_at = NOW()
+    WHERE product_id = v_stock.product_id
+      AND size = v_stock.size
+      AND available_quantity >= v_stock.quantity;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    IF v_updated_count = 0 THEN
+      RAISE EXCEPTION 'OUT_OF_STOCK' USING ERRCODE = 'P0001';
+    END IF;
+  END LOOP;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items)
+  LOOP
+    INSERT INTO public.orders (
+      customer_name, email, phone, address, product, product_id,
+      size, quantity, total, status, stock_reserved
+    )
+    VALUES (
+      p_customer_name,
+      p_email,
+      p_phone,
+      p_address,
+      v_item->>'product',
+      v_item->>'productId',
+      v_item->>'size',
+      (v_item->>'quantity')::INTEGER,
+      (v_item->>'total')::INTEGER,
+      'Pending Confirmation',
+      TRUE
+    )
+    RETURNING id INTO v_order_id;
+    v_order_ids := array_append(v_order_ids, v_order_id);
+  END LOOP;
+
+  RETURN jsonb_build_object('orderIds', to_jsonb(v_order_ids));
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.update_pending_inventory_order(
+  p_order_id BIGINT,
+  p_quantity INTEGER,
+  p_total INTEGER,
+  p_product_id TEXT,
+  p_target_status TEXT
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_order public.orders%ROWTYPE;
+  v_delta INTEGER;
+  v_updated_count INTEGER;
+BEGIN
+  IF p_quantity < 1 OR p_total < 1 OR
+      p_target_status NOT IN ('Pending Confirmation', 'Confirmed') THEN
+    RAISE EXCEPTION 'Invalid inventory order update.' USING ERRCODE = '22023';
+  END IF;
+
+  SELECT * INTO v_order
+  FROM public.orders
+  WHERE id = p_order_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_order.status <> 'Pending Confirmation' OR
+      (v_order.product_id IS NOT NULL AND v_order.product_id <> p_product_id) THEN
+    RETURN jsonb_build_object('updated', FALSE);
+  END IF;
+
+  v_delta := CASE
+    WHEN v_order.stock_reserved THEN p_quantity - v_order.quantity
+    ELSE p_quantity
+  END;
+
+  IF v_delta > 0 THEN
+    UPDATE public.inventory_stock
+    SET available_quantity = available_quantity - v_delta,
+        updated_at = NOW()
+    WHERE product_id = p_product_id
+      AND size = v_order.size
+      AND available_quantity >= v_delta;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    IF v_updated_count = 0 THEN
+      RAISE EXCEPTION 'OUT_OF_STOCK' USING ERRCODE = 'P0001';
+    END IF;
+  ELSIF v_delta < 0 THEN
+    UPDATE public.inventory_stock
+    SET available_quantity = available_quantity + ABS(v_delta),
+        updated_at = NOW()
+    WHERE product_id = p_product_id
+      AND size = v_order.size;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    IF v_updated_count = 0 THEN
+      RAISE EXCEPTION 'INVENTORY_NOT_CONFIGURED' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  UPDATE public.orders
+  SET quantity = p_quantity,
+      total = p_total,
+      product_id = p_product_id,
+      stock_reserved = TRUE,
+      status = p_target_status
+  WHERE id = p_order_id;
+
+  RETURN jsonb_build_object(
+    'updated', TRUE,
+    'quantity', p_quantity,
+    'total', p_total,
+    'status', p_target_status
+  );
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.cancel_pending_inventory_order(p_order_id BIGINT)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_order public.orders%ROWTYPE;
+  v_updated_count INTEGER;
+BEGIN
+  SELECT * INTO v_order
+  FROM public.orders
+  WHERE id = p_order_id
+  FOR UPDATE;
+
+  IF NOT FOUND OR v_order.status <> 'Pending Confirmation' THEN
+    RETURN jsonb_build_object('updated', FALSE);
+  END IF;
+
+  IF v_order.stock_reserved THEN
+    UPDATE public.inventory_stock
+    SET available_quantity = available_quantity + v_order.quantity,
+        updated_at = NOW()
+    WHERE product_id = v_order.product_id
+      AND size = v_order.size;
+
+    GET DIAGNOSTICS v_updated_count = ROW_COUNT;
+    IF v_updated_count = 0 THEN
+      RAISE EXCEPTION 'INVENTORY_NOT_CONFIGURED' USING ERRCODE = 'P0001';
+    END IF;
+  END IF;
+
+  UPDATE public.orders
+  SET status = 'Cancelled',
+      stock_reserved = FALSE
+  WHERE id = p_order_id;
+
+  RETURN jsonb_build_object('updated', TRUE);
+END;
+$$;
+
+CREATE OR REPLACE FUNCTION public.set_inventory_stock(
+  p_product_id TEXT,
+  p_size TEXT,
+  p_quantity INTEGER
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_stock public.inventory_stock%ROWTYPE;
+BEGIN
+  IF p_quantity < 0 OR p_quantity > 2147483647 THEN
+    RAISE EXCEPTION 'Stock must be a non-negative integer.' USING ERRCODE = '22023';
+  END IF;
+
+  UPDATE public.inventory_stock
+  SET available_quantity = p_quantity,
+      updated_at = NOW()
+  WHERE product_id = p_product_id
+    AND size = p_size
+  RETURNING * INTO v_stock;
+
+  IF NOT FOUND THEN
+    RETURN NULL;
+  END IF;
+
+  RETURN jsonb_build_object(
+    'product_id', v_stock.product_id,
+    'size', v_stock.size,
+    'available_quantity', v_stock.available_quantity,
+    'low_stock_threshold', v_stock.low_stock_threshold,
+    'updated_at', v_stock.updated_at
+  );
+END;
+$$;
+
+REVOKE ALL ON FUNCTION public.create_inventory_orders(TEXT, TEXT, TEXT, TEXT, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_inventory_orders(TEXT, TEXT, TEXT, TEXT, JSONB)
+  TO service_role;
+REVOKE ALL ON FUNCTION public.update_pending_inventory_order(BIGINT, INTEGER, INTEGER, TEXT, TEXT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.update_pending_inventory_order(BIGINT, INTEGER, INTEGER, TEXT, TEXT)
+  TO service_role;
+REVOKE ALL ON FUNCTION public.cancel_pending_inventory_order(BIGINT)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.cancel_pending_inventory_order(BIGINT)
+  TO service_role;
+REVOKE ALL ON FUNCTION public.set_inventory_stock(TEXT, TEXT, INTEGER)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.set_inventory_stock(TEXT, TEXT, INTEGER)
+  TO service_role;
+
 CREATE TABLE IF NOT EXISTS public.admin_sessions (
   id TEXT PRIMARY KEY,
   session_data JSONB NOT NULL,

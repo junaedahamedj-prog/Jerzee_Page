@@ -44,6 +44,13 @@ Open:
 ## How it works
 The `/staff` portal is not linked from the storefront. The legacy `/admin.html` route and every order-listing or order-management endpoint require a session created by `/admin/login`; customers can still submit orders publicly. Logout invalidates the server-side session. The admin order list refreshes automatically every 15 seconds while its browser tab is visible; manual refresh remains available. Order actions look up only the requested order, and product pricing is loaded once per admin page visit. Cart checkout submits all items together and records each product/size as its own order row with the same customer details. Product data remains in `data/products.json`; customer orders are stored in the Supabase `public.orders` table.
 
+## Inventory management
+Running [`supabase/schema.sql`](./supabase/schema.sql) adds the `public.inventory_stock` size-level table and transactional stock/order functions. It preserves existing order history and seeds each current catalog product/size with zero available units. The seed uses `ON CONFLICT DO NOTHING`, so rerunning the migration does not reset stock that has already been entered. Existing orders are not marked as reserved and do not change stock retroactively.
+
+After applying the schema, sign in at `/admin/login` and open `/staff`. The **Stock by Size** table shows available-to-sell units after pending-order reservations; enter the verified available quantity and select **Save stock**. Sizes at or below the default low-stock threshold of five are flagged; zero-stock sizes are identified separately. Customers see only whether a size is available, not exact inventory counts.
+
+Checkout atomically reserves all requested product/size quantities while creating pending orders. Insufficient stock rejects the entire cart. Confirmation does not deduct stock a second time. Editing a pending order adjusts its reservation by the quantity difference, while cancelling a pending reserved order releases its units once and preserves the order record. Historical pending orders created before this migration have no reservation; their cancellation does not add stock.
+
 Run the automated API tests with:
 
 ```bash

@@ -963,6 +963,29 @@ button, input, select, textarea {
   font-weight: 800;
 }
 
+.size-chip.sold-out,
+.size-chip:disabled {
+  color: var(--text-muted);
+  border-style: dashed;
+  cursor: not-allowed;
+  opacity: 0.55;
+  text-decoration: line-through;
+}
+
+.size-chip:disabled:hover {
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+}
+
+.product-availability {
+  margin-top: 7px;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.product-availability.in-stock { color: var(--accent-lime); }
+.product-availability.out-of-stock { color: #ff8a8a; }
+
 /* Bottom Price & Action Row */
 .product-footer {
   display: flex;
@@ -1034,6 +1057,14 @@ button, input, select, textarea {
 .btn-card-order:hover {
   background: var(--accent-lime);
   border-color: var(--accent-lime);
+}
+
+.btn-card-cart:disabled,
+.btn-card-order:disabled {
+  background: rgba(255, 255, 255, 0.04);
+  border-color: var(--border-subtle);
+  color: var(--text-muted);
+  cursor: not-allowed;
 }
 
 /* ==========================================================================
