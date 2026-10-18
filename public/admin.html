@@ -219,6 +219,108 @@
         background: #ff5252;
         color: #fff;
       }
+      .delete-dialog {
+        width: min(480px, calc(100% - 32px));
+        margin: auto;
+        padding: 0;
+        color: var(--text-primary);
+        background: var(--bg-card);
+        border: 1px solid rgba(255, 255, 255, 0.12);
+        border-radius: 16px;
+        box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7);
+      }
+      .delete-dialog::backdrop {
+        background: rgba(0, 0, 0, 0.78);
+        backdrop-filter: blur(4px);
+      }
+      .delete-dialog-content { padding: 28px; }
+      .delete-dialog-label {
+        margin-bottom: 8px;
+        color: #ff8a8a;
+        font-size: 11px;
+        font-weight: 800;
+        letter-spacing: 1.5px;
+        text-transform: uppercase;
+      }
+      .delete-dialog h2 {
+        font-family: 'Outfit', sans-serif;
+        font-size: 24px;
+        font-weight: 800;
+      }
+      .delete-dialog-description {
+        margin-top: 8px;
+        color: var(--text-secondary);
+        font-size: 13px;
+        line-height: 1.6;
+      }
+      .delete-order-summary {
+        display: grid;
+        gap: 5px;
+        margin-top: 20px;
+        padding: 14px 16px;
+        background: #090909;
+        border: 1px solid var(--border);
+        border-radius: 9px;
+      }
+      .delete-order-id {
+        color: var(--accent-lime);
+        font-family: 'Outfit', sans-serif;
+        font-size: 14px;
+        font-weight: 800;
+      }
+      .delete-order-detail {
+        color: var(--text-secondary);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      .delete-dialog-warning {
+        margin-top: 16px;
+        padding: 11px 12px;
+        color: #ffb0b0;
+        background: rgba(255, 82, 82, 0.08);
+        border: 1px solid rgba(255, 82, 82, 0.2);
+        border-radius: 8px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .delete-dialog-error {
+        min-height: 0;
+        margin-top: 12px;
+        color: #ff8a8a;
+        font-size: 12px;
+      }
+      .delete-dialog-error:empty { display: none; }
+      .delete-dialog-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 10px;
+        margin-top: 24px;
+      }
+      .delete-dialog-actions button {
+        min-height: 42px;
+        padding: 0 16px;
+        border-radius: 8px;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .delete-dialog-cancel {
+        color: var(--text-primary);
+        background: #222;
+        border: 1px solid var(--border);
+      }
+      .delete-dialog-confirm {
+        color: #fff;
+        background: #c83232;
+        border: 1px solid #e04a4a;
+      }
+      .delete-dialog-confirm:hover:not(:disabled) { background: #e04444; }
+      .delete-dialog-actions button:focus-visible {
+        outline: 2px solid var(--accent-lime);
+        outline-offset: 3px;
+      }
+      .delete-dialog-actions button:disabled { opacity: 0.6; cursor: wait; }
       .pending-actions {
         display: flex;
         flex-wrap: wrap;
@@ -328,6 +430,30 @@
       </table>
     </div>
 
+    <dialog id="deleteOrderDialog" class="delete-dialog" aria-labelledby="deleteDialogTitle">
+      <div class="delete-dialog-content">
+        <div class="delete-dialog-label">Permanent action</div>
+        <h2 id="deleteDialogTitle">Delete this order?</h2>
+        <p class="delete-dialog-description">
+          Review the order below before continuing. This action cannot be undone.
+        </p>
+        <div class="delete-order-summary" aria-live="polite">
+          <div id="deleteOrderId" class="delete-order-id"></div>
+          <div id="deleteOrderProduct" class="delete-order-detail"></div>
+          <div id="deleteOrderCustomer" class="delete-order-detail"></div>
+          <div id="deleteOrderTotal" class="delete-order-detail"></div>
+        </div>
+        <div class="delete-dialog-warning">
+          The order and its customer details will be permanently removed.
+        </div>
+        <div id="deleteDialogError" class="delete-dialog-error" role="alert" aria-live="assertive"></div>
+        <div class="delete-dialog-actions">
+          <button type="button" id="cancelDeleteBtn" class="delete-dialog-cancel">Keep order</button>
+          <button type="button" id="confirmDeleteBtn" class="delete-dialog-confirm">Delete permanently</button>
+        </div>
+      </div>
+    </dialog>
+
     <script>
       const pendingConfirmation = 'Pending Confirmation';
 
@@ -352,6 +478,64 @@
       }
 
       let ordersLoadInProgress = false;
+      let orderPendingDeletion = null;
+      let deleteDialogTrigger = null;
+
+      function openDeleteOrderDialog(order, trigger) {
+        const dialog = document.getElementById('deleteOrderDialog');
+        orderPendingDeletion = order;
+        deleteDialogTrigger = trigger;
+        document.getElementById('deleteOrderId').textContent = `ORDER #${order.id}`;
+        document.getElementById('deleteOrderProduct').textContent =
+          `${order.product || 'Unknown product'} · Size ${order.size || '—'} · Qty ${Number(order.quantity) || 0}`;
+        document.getElementById('deleteOrderCustomer').textContent =
+          `Customer: ${order.customer_name || 'Unknown customer'}`;
+        document.getElementById('deleteOrderTotal').textContent =
+          `Order total: ৳${Number(order.total || 0).toLocaleString('en-BD')}`;
+        document.getElementById('deleteDialogError').textContent = '';
+        document.getElementById('confirmDeleteBtn').disabled = false;
+        dialog.showModal();
+        document.getElementById('cancelDeleteBtn').focus();
+      }
+
+      function closeDeleteOrderDialog() {
+        const dialog = document.getElementById('deleteOrderDialog');
+        if (dialog.open) dialog.close();
+        orderPendingDeletion = null;
+        document.getElementById('confirmDeleteBtn').disabled = false;
+        if (deleteDialogTrigger?.isConnected) deleteDialogTrigger.focus();
+        deleteDialogTrigger = null;
+      }
+
+      async function deletePendingOrder() {
+        if (!orderPendingDeletion) return;
+
+        const orderId = orderPendingDeletion.id;
+        const confirmButton = document.getElementById('confirmDeleteBtn');
+        const errorElement = document.getElementById('deleteDialogError');
+        confirmButton.disabled = true;
+        errorElement.textContent = '';
+
+        try {
+          const response = await fetch(`/api/orders/${encodeURIComponent(orderId)}`, {
+            method: 'DELETE',
+            cache: 'no-store'
+          });
+          if (response.status === 401) {
+            window.location.assign('/admin/login');
+            return;
+          }
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `Delete failed with ${response.status}`);
+          closeDeleteOrderDialog();
+          showAdminStatus(`Order #${orderId} was deleted permanently.`, 'success');
+          await loadOrders();
+        } catch (error) {
+          console.error('Admin delete failed:', error);
+          errorElement.textContent = error.message || 'Delete failed. Please try again.';
+          confirmButton.disabled = false;
+        }
+      }
 
       async function loadOrders({ silent = false } = {}) {
         if (ordersLoadInProgress) return;
@@ -528,25 +712,10 @@
           });
 
           rows.querySelectorAll('.delete-btn').forEach((button) => {
-            button.addEventListener('click', async (event) => {
-              const id = Number(event.target.dataset.orderId);
-              const confirmed = window.confirm('Delete this order permanently?');
-              if (!confirmed) return;
-
-              try {
-                const response = await fetch(`/api/orders/${id}`, {
-                  method: 'DELETE',
-                  cache: 'no-store'
-                });
-                if (!response.ok) {
-                  throw new Error(`Delete failed with ${response.status}`);
-                }
-                showAdminStatus(`Order #${id} was deleted.`, 'success');
-                await loadOrders();
-              } catch (error) {
-                console.error('Admin delete failed:', error);
-                showAdminStatus('Delete failed. Please retry.', 'error');
-              }
+            button.addEventListener('click', (event) => {
+              const id = Number(event.currentTarget.dataset.orderId);
+              const order = orders.find((item) => Number(item.id) === id);
+              if (order) openDeleteOrderDialog(order, event.currentTarget);
             });
           });
         } catch (error) {
@@ -569,6 +738,17 @@
       }
 
       document.getElementById('refreshBtn').addEventListener('click', loadOrders);
+      document.getElementById('cancelDeleteBtn').addEventListener('click', closeDeleteOrderDialog);
+      document.getElementById('confirmDeleteBtn').addEventListener('click', deletePendingOrder);
+      document.getElementById('deleteOrderDialog').addEventListener('click', (event) => {
+        if (event.target === event.currentTarget) closeDeleteOrderDialog();
+      });
+      document.getElementById('deleteOrderDialog').addEventListener('close', () => {
+        if (!orderPendingDeletion) return;
+        orderPendingDeletion = null;
+        if (deleteDialogTrigger?.isConnected) deleteDialogTrigger.focus();
+        deleteDialogTrigger = null;
+      });
       document.getElementById('logoutBtn').addEventListener('click', async () => {
         try {
           await fetch('/admin/logout', { method: 'POST', cache: 'no-store' });
