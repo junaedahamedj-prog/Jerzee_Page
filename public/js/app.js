@@ -307,6 +307,15 @@ function setSportFilter(sportKey) {
   renderProducts();
 }
 
+function getSizeAvailabilityStatus(availability, availabilityKnown) {
+  if (!availabilityKnown) return 'Stock status unavailable';
+  const quantity = Number(availability?.availableQuantity);
+  if (!availability?.inStock || !Number.isFinite(quantity) || quantity < 1) {
+    return 'Currently out of stock';
+  }
+  return quantity <= 3 ? `Only ${quantity} left` : 'Jersey available';
+}
+
 function renderProducts() {
   const grid = document.getElementById('productsGrid');
   if (!grid) return;
@@ -334,11 +343,8 @@ function renderProducts() {
       return availability?.inStock === true;
     };
     const selectedSizeIsAvailable = sizeIsAvailable(selectedSize);
-    const selectedSizeStatus = availabilityKnown
-      ? selectedSizeIsAvailable
-        ? 'Jersey available'
-        : 'Currently out of stock'
-      : 'Stock status unavailable';
+    const selectedSizeAvailability = product.availability?.find((item) => item.size === selectedSize);
+    const selectedSizeStatus = getSizeAvailabilityStatus(selectedSizeAvailability, availabilityKnown);
     const availabilityClass = availabilityKnown
       ? selectedSizeIsAvailable ? 'in-stock' : 'out-of-stock'
       : 'unavailable';
@@ -414,11 +420,7 @@ function renderProducts() {
       const isAvailable = availability?.inStock === true;
       const status = chip.closest('.size-selector').querySelector('.product-availability');
       if (status) {
-        status.textContent = availabilityKnown
-          ? isAvailable
-            ? 'Jersey available'
-            : 'Currently out of stock'
-          : 'Stock status unavailable';
+        status.textContent = getSizeAvailabilityStatus(availability, availabilityKnown);
         status.classList.toggle('in-stock', availabilityKnown && isAvailable);
         status.classList.toggle('out-of-stock', availabilityKnown && !isAvailable);
         status.classList.toggle('unavailable', !availabilityKnown);
