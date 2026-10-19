@@ -23,34 +23,52 @@ class SupabaseRestClient {
       headers.Prefer = prefer;
     }
 
-    const response = await fetch(url, {
-      method,
-      headers,
-      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
-    });
-    const responseText = await response.text();
-    let data = null;
-
-    if (responseText) {
+    const maxAttempts = method === 'GET' ? 3 : 1;
+    for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
+      let response;
       try {
-        data = JSON.parse(responseText);
-      } catch {
-        data = responseText;
+        response = await fetch(url, {
+          method,
+          headers,
+          ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+        });
+      } catch (error) {
+        if (attempt === maxAttempts) throw error;
+        await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+        continue;
       }
-    }
 
-    if (!response.ok) {
-      const message = typeof data === 'object' && data?.message
-        ? data.message
-        : `Supabase returned HTTP ${response.status}`;
-      const error = new Error(message);
-      error.status = response.status;
-      error.code = typeof data === 'object' ? data?.code : undefined;
-      error.resource = resource;
-      throw error;
-    }
+      const responseText = await response.text();
+      let data = null;
 
-    return data;
+      if (responseText) {
+        try {
+          data = JSON.parse(responseText);
+        } catch {
+          data = responseText;
+        }
+      }
+
+      if (!response.ok) {
+        const isTransient = response.status === 408 || response.status === 429 ||
+          response.status >= 500;
+        if (method === 'GET' && isTransient && attempt < maxAttempts) {
+          await new Promise((resolve) => setTimeout(resolve, 200 * attempt));
+          continue;
+        }
+
+        const message = typeof data === 'object' && data?.message
+          ? data.message
+          : `Supabase returned HTTP ${response.status}`;
+        const error = new Error(message);
+        error.status = response.status;
+        error.code = typeof data === 'object' ? data?.code : undefined;
+        error.resource = resource;
+        throw error;
+      }
+
+      return data;
+    }
   }
 }
 

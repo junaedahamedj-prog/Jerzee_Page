@@ -10,6 +10,7 @@ let orders;
 let requests;
 let requestBodies;
 let nextId;
+let inventoryFailuresRemaining;
 const testServiceRoleKey = randomBytes(32).toString('hex');
 
 test.before(async () => {
@@ -17,6 +18,7 @@ test.before(async () => {
   requests = [];
   requestBodies = [];
   nextId = 46;
+  inventoryFailuresRemaining = 0;
   remoteServer = http.createServer(async (req, res) => {
     const url = new URL(req.url, 'http://localhost');
     const query = url.searchParams;
@@ -42,6 +44,10 @@ test.before(async () => {
     }
 
     if (url.pathname === '/rest/v1/inventory_stock' && req.method === 'GET') {
+      if (inventoryFailuresRemaining > 0) {
+        inventoryFailuresRemaining -= 1;
+        return respond(503, { message: 'Temporary Supabase failure' });
+      }
       return respond(200, [{
         product_id: 'barcelona-home-2026',
         size: 'M',
@@ -276,4 +282,14 @@ test('Supabase inventory adapter reads stock and calls inventory transaction RPC
     p_target_status: 'Confirmed',
   });
   assert.deepEqual(calls[3].body, { p_order_id: 12 });
+});
+
+test('Supabase inventory reads retry a transient server failure', async () => {
+  inventoryFailuresRemaining = 1;
+  const requestCount = requests.length;
+
+  const inventory = await store.listInventory();
+
+  assert.equal(inventory[0].available_quantity, 4);
+  assert.equal(requests.length - requestCount, 2);
 });
