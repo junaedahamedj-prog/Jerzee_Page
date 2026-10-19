@@ -943,6 +943,49 @@ test('products endpoint returns available jerseys and supports search & sport fi
   assert.ok(searchProducts.some((p) => p.name.includes('Barcelona')));
 });
 
+test('product and inventory APIs initialize the order store on serverless requests', async () => {
+  let initialized = false;
+  const isolatedSessionStore = new TestSessionStore();
+  await isolatedSessionStore.set(
+    'inventory-test-session',
+    { authenticated: true },
+    Date.now() + 60_000
+  );
+  const isolatedOrderStore = {
+    async initialize() {
+      initialized = true;
+    },
+    async listInventory() {
+      assert.equal(initialized, true);
+      return [];
+    },
+  };
+  const isolatedApp = createApp(isolatedOrderStore, {
+    adminUsername: testAdminUsername,
+    adminPassword: testAdminPassword,
+    sessionStore: isolatedSessionStore,
+  });
+  const isolatedServer = await new Promise((resolve) => {
+    const listener = isolatedApp.listen(0, '127.0.0.1', () => resolve(listener));
+  });
+
+  try {
+    const port = isolatedServer.address().port;
+    const productsResponse = await fetch(`http://localhost:${port}/api/products`);
+    assert.equal(productsResponse.status, 200);
+    assert.equal(initialized, true);
+
+    const inventoryResponse = await fetch(`http://localhost:${port}/api/inventory`, {
+      headers: { Cookie: 'jerzee_admin_session=inventory-test-session' },
+    });
+    assert.equal(inventoryResponse.status, 200);
+  } finally {
+    await new Promise((resolve, reject) => {
+      isolatedServer.close((error) => (error ? reject(error) : resolve()));
+    });
+  }
+});
+
 test('public product availability shows the available quantity without internal inventory data', async () => {
   orderStore.inventory.get('barcelona-home-2026:M').available_quantity = 10;
   const response = await fetch(`http://localhost:${server.address().port}/api/products`);

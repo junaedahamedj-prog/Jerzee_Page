@@ -342,8 +342,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
     return requireAdmin(req, res, next);
   });
   app.use('/api/inventory', requireAdmin);
-  app.use(express.static(path.join(__dirname, 'public')));
-  app.use('/api/orders', async (req, res, next) => {
+  app.use(['/api/orders', '/api/products', '/api/inventory'], async (req, res, next) => {
     try {
       await req.app.locals.initializeOrderStore();
       next();
@@ -351,6 +350,7 @@ function createApp(orderStore = new SupabaseOrdersStore(), options = {}) {
       next(error);
     }
   });
+  app.use(express.static(path.join(__dirname, 'public')));
 
   app.get('/api/products', async (req, res) => {
     const { sport, q } = req.query;
