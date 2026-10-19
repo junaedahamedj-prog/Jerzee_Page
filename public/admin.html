@@ -483,7 +483,7 @@
       </div>
       <div class="actions-group">
         <a href="/" class="btn-storefront">← Storefront</a>
-        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 15 sec</span>
+        <span style="color: var(--text-secondary); font-size: 12px;">Auto-updates every 60 sec</span>
         <button type="button" id="refreshBtn">↻ REFRESH</button>
         <button type="button" id="logoutBtn" class="btn-logout">LOG OUT</button>
       </div>
@@ -973,8 +973,8 @@
             return;
           }
           if (!response.ok) throw new Error(result.error || 'Stock update failed.');
+          await loadInventory();
           showInventoryStatus(`Stock updated for ${result.stock.product_id} (${size}).`, 'success');
-          void loadInventory();
         } catch (error) {
           console.error('Inventory update failed:', error);
           showInventoryStatus(error.message || 'Stock update failed. Please try again.');
@@ -1043,12 +1043,13 @@
       loadInventory();
       window.setInterval(() => {
         if (document.hidden) return;
+        if (document.activeElement?.matches('.stock-input, .pending-quantity')) return;
         if (document.getElementById('stockPanel').hidden) {
           void loadOrders({ silent: true });
         } else {
           void loadInventory({ silent: true });
         }
-      }, 15000);
+      }, 60000);
     </script>
   </body>
 </html>

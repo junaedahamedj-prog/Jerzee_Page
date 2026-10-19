@@ -988,6 +988,16 @@ test('inventory listing and stock updates require admin authentication', async (
   );
   assert.equal(updateResponse.status, 200);
   assert.equal((await updateResponse.json()).stock.available_quantity, 7);
+
+  const productsResponse = await fetch(`http://localhost:${port}/api/products`);
+  assert.equal(productsResponse.status, 200);
+  const products = await productsResponse.json();
+  const product = products.find((item) => item.id === 'barcelona-home-2026');
+  assert.deepEqual(product.availability.find((item) => item.size === 'M'), {
+    size: 'M',
+    availableQuantity: 7,
+    inStock: true,
+  });
 });
 
 test('checkout reserves stock once and confirmation does not deduct it again', async () => {

@@ -108,6 +108,8 @@ const AppState = {
   cart: JSON.parse(localStorage.getItem('jerzee_cart') || '[]'),
   currentCheckoutItems: null
 };
+let productsFetchInProgress = false;
+let productsRefreshPending = false;
 
 // ==========================================================================
 // 3. INITIALIZATION
@@ -121,6 +123,9 @@ document.addEventListener('DOMContentLoaded', () => {
   initSearch();
   initOrderModal();
   initNewsletter();
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) void fetchProducts();
+  });
 });
 
 // ==========================================================================
@@ -227,28 +232,45 @@ function initSportsCategories() {
 // 7. PRODUCT CATALOG & FETCHING
 // ==========================================================================
 async function fetchProducts() {
-  try {
-    const response = await fetch('/api/products');
-    if (response.ok) {
-      const data = await response.json();
-      if (Array.isArray(data) && data.length > 0) {
-        AppState.products = data;
-      }
-    }
-  } catch (err) {
-    console.warn('JERZEE: Using built-in product catalog fallback.', err);
+  if (productsFetchInProgress) {
+    productsRefreshPending = true;
+    return;
   }
+  productsFetchInProgress = true;
 
-  // Pre-select 'M' size for all products by default
-  AppState.products.forEach(p => {
-    if (!AppState.selectedSizes[p.id]) {
-      AppState.selectedSizes[p.id] = 'M';
-    }
-  });
+  try {
+    do {
+      productsRefreshPending = false;
+      try {
+        const response = await fetch('/api/products');
+        if (response.ok) {
+          const data = await response.json();
+          if (Array.isArray(data) && data.length > 0) {
+            AppState.products = data;
+          }
+        }
+      } catch (err) {
+        console.warn('JERZEE: Using built-in product catalog fallback.', err);
+      }
 
-  renderProductFilters();
-  renderProducts();
-  populateOrderModalProductDropdown();
+      // Prefer an in-stock size after availability refresh.
+      AppState.products.forEach(p => {
+        const sizes = p.sizes || ['S', 'M', 'L', 'XL', 'XXL'];
+        const selectedSize = AppState.selectedSizes[p.id];
+        const selectedAvailability = p.availability?.find((item) => item.size === selectedSize);
+        if (!selectedSize || selectedAvailability?.inStock === false) {
+          AppState.selectedSizes[p.id] =
+            p.availability?.find((item) => item.inStock)?.size || sizes[0] || 'M';
+        }
+      });
+
+      renderProductFilters();
+      renderProducts();
+      populateOrderModalProductDropdown();
+    } while (productsRefreshPending);
+  } finally {
+    productsFetchInProgress = false;
+  }
 }
 
 function renderProductFilters() {
@@ -312,10 +334,9 @@ function renderProducts() {
       return availability?.inStock === true;
     };
     const selectedSizeIsAvailable = sizeIsAvailable(selectedSize);
-    const selectedAvailability = product.availability?.find((item) => item.size === selectedSize);
     const selectedSizeStatus = availabilityKnown
       ? selectedSizeIsAvailable
-        ? `Jersey available - ${selectedAvailability.availableQuantity}`
+        ? 'Jersey available'
         : 'Currently out of stock'
       : 'Stock status unavailable';
     const availabilityClass = availabilityKnown
@@ -395,7 +416,7 @@ function renderProducts() {
       if (status) {
         status.textContent = availabilityKnown
           ? isAvailable
-            ? `Jersey available - ${availability.availableQuantity}`
+            ? 'Jersey available'
             : 'Currently out of stock'
           : 'Stock status unavailable';
         status.classList.toggle('in-stock', availabilityKnown && isAvailable);
