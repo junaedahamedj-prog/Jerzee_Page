@@ -183,18 +183,21 @@ function initHeroVideo() {
 
   if (!video) return;
 
-  // Handle video loading errors gracefully
-  video.addEventListener('error', () => {
+  const showFallback = () => {
     if (fallback) fallback.style.display = 'block';
     video.style.display = 'none';
+  };
+
+  // Handle video loading errors gracefully
+  video.addEventListener('error', () => {
+    showFallback();
   });
 
   // Check if video actually plays
   const playPromise = video.play();
   if (playPromise !== undefined) {
     playPromise.catch(() => {
-      // Autoplay was prevented or source not found; fallback remains visible
-      if (fallback) fallback.style.display = 'block';
+      showFallback();
     });
   }
 }

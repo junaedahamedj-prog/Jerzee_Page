@@ -10,4 +10,4 @@ Video Specifications:
 - Format: MP4 (H.264 video codec recommended for universal browser support)
 - Attributes applied: autoplay, muted, loop, playsinline
 - Aspect ratio: 16:9 widescreen recommended
-- If no video is present, the website automatically displays the high-resolution fallback image (`/images/hero_fallback.jpg`).
+- If no video is present, the website automatically displays the high-resolution fallback image (`/images/hero.png`).
