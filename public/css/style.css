@@ -469,7 +469,7 @@ button, input, select, textarea {
   background-image: url('/images/hero.png');
   background-size: cover;
   background-position: center top;
-  filter: brightness(0.52) contrast(1.1);
+  filter: brightness(0.78) contrast(1.1);
 }
 
 /* Hero dark gradient overlay for text readability */
@@ -477,7 +477,7 @@ button, input, select, textarea {
   position: absolute;
   inset: 0;
   z-index: 2;
-  background: linear-gradient(180deg, rgba(5, 5, 5, 0.4) 0%, rgba(5, 5, 5, 0.82) 100%);
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0.2) 0%, rgba(5, 5, 5, 0.55) 100%);
   pointer-events: none;
 }
 
@@ -1958,8 +1958,12 @@ button, input, select, textarea {
     min-height: 520px;
   }
   .hero-bg-fallback {
-    background-position: 72% center;
-    filter: brightness(0.68) contrast(1.1);
+    background-size: auto 150%;
+    background-position: center center;
+    filter: brightness(1) contrast(1.1);
+  }
+  .hero-overlay {
+    background: linear-gradient(180deg, rgba(5, 5, 5, 0.08) 0%, rgba(5, 5, 5, 0.2) 100%);
   }
   .hero-title {
     font-size: clamp(40px, 11vw, 64px);
