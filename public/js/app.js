@@ -188,6 +188,10 @@ function initHeroVideo() {
     video.style.display = 'none';
   };
 
+  video.addEventListener('loadeddata', () => {
+    video.style.opacity = '1';
+  });
+
   // Handle video loading errors gracefully
   video.addEventListener('error', () => {
     showFallback();
