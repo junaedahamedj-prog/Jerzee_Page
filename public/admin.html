@@ -847,6 +847,13 @@
               <div id="productNameError" class="product-field-error" role="alert"></div>
             </div>
             <div class="product-field">
+              <label for="productBadge">Product message (optional)</label>
+              <input id="productBadge" name="badge" type="text" maxlength="40"
+                placeholder="e.g. National Pride" />
+              <div class="product-form-note">Appears as a small badge on the jersey card.</div>
+              <div id="productBadgeError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
               <label for="productCategory">Category *</label>
               <select id="productCategory" name="category" required>
                 <option value="">Choose a category</option>
@@ -1391,6 +1398,7 @@
       function setProductFieldErrors(fields = {}) {
         const fieldIds = {
           name: 'productNameError',
+          badge: 'productBadgeError',
           description: 'productDescriptionError',
           category: 'productCategoryError',
           price: 'productPriceError',
@@ -1426,6 +1434,7 @@
         document.getElementById('saveProductBtn').textContent =
           product ? 'Save Changes' : 'Save Product';
         document.getElementById('productName').value = product?.name || '';
+        document.getElementById('productBadge').value = product?.badge || '';
         document.getElementById('productCategory').value = product?.sport || '';
         document.getElementById('productPrice').value = product?.price ?? '';
         document.getElementById('productDescription').value = product?.description || '';
@@ -1500,6 +1509,7 @@
         const file = document.getElementById('productImageFile').files[0];
         const payload = {
           name: document.getElementById('productName').value.trim(),
+          badge: document.getElementById('productBadge').value.trim(),
           category: document.getElementById('productCategory').value,
           price: Number(document.getElementById('productPrice').value),
           description: document.getElementById('productDescription').value.trim(),

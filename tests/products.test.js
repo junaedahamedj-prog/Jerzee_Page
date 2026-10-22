@@ -194,6 +194,7 @@ async function login() {
 function validProduct(overrides = {}) {
   return {
     name: 'Training Jersey',
+    badge: '',
     category: 'Football',
     price: 1499,
     description: 'A durable training jersey.',
@@ -265,6 +266,7 @@ test('product creation validates fields, stores image and initializes size inven
     method: 'POST',
     body: validProduct({
       category: 'Basketball',
+      badge: 'This message is intentionally longer than the forty-character badge length limit',
       price: -10,
       sizes: ['XXXL'],
       initialStock: { XXXL: -1 },
@@ -277,6 +279,7 @@ test('product creation validates fields, stores image and initializes size inven
     method: 'POST',
     body: validProduct({
       name: 'Uploaded Jersey',
+      badge: 'National Pride',
       imageUrl: '',
       imageFile: {
         contentType: 'image/png',
@@ -287,6 +290,7 @@ test('product creation validates fields, stores image and initializes size inven
   assert.equal(created.response.status, 201);
   const createdProduct = created.result.product;
   assert.equal(createdProduct.name, 'Uploaded Jersey');
+  assert.equal(createdProduct.badge, 'National Pride');
   assert.match(createdProduct.image, /^https:\/\/images\.example\//);
   assert.equal(store.inventory.get(`${createdProduct.id}:M`).available_quantity, 4);
   assert.equal(store.inventory.get(`${createdProduct.id}:L`).available_quantity, 0);
@@ -347,6 +351,7 @@ test('editing and deactivation preserve inventory and order history, while check
     method: 'PATCH',
     body: {
       name: 'Updated Name',
+      badge: 'Limited Edition',
       category: 'Cricket',
       price: 1599,
       description: 'Updated description.',
@@ -355,6 +360,7 @@ test('editing and deactivation preserve inventory and order history, while check
     },
   });
   assert.equal(updated.response.status, 200);
+  assert.equal(updated.result.product.badge, 'Limited Edition');
   assert.equal(store.inventory.get(`${product.id}:M`).available_quantity, 4);
 
   const checkout = await request('/api/orders', {

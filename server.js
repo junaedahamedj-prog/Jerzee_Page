@@ -236,9 +236,16 @@ function validateProductInput(body, { existing, creating }) {
   const category = PRODUCT_CATEGORIES.get(categoryValue);
   const price = body.price;
   const active = body.active;
+  const badge = body.badge === undefined && existing
+    ? existing.badge || ''
+    : typeof body.badge === 'string' ? body.badge.trim() : '';
   const imageUrl = typeof body.imageUrl === 'string' ? body.imageUrl.trim() : '';
 
   if (!name || name.length > 120) fields.name = 'Enter a product name (1-120 characters).';
+  if (typeof body.badge !== 'undefined' &&
+      (typeof body.badge !== 'string' || body.badge.trim().length > 40)) {
+    fields.badge = 'Keep the product message to 40 characters or fewer.';
+  }
   if (!description || description.length > 2000) {
     fields.description = 'Enter a description (1-2000 characters).';
   }
@@ -303,7 +310,7 @@ function validateProductInput(body, { existing, creating }) {
       sportKey: category.sportKey,
       price,
       image: validImageUrl || existing?.image || '',
-      badge: existing?.badge || '',
+      badge,
       featured: existing?.featured || false,
       active,
       ...(creating ? { sizes } : {}),
