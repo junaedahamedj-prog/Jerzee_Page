@@ -19,6 +19,79 @@ ALTER TABLE public.orders
   ADD COLUMN IF NOT EXISTS product_id TEXT,
   ADD COLUMN IF NOT EXISTS stock_reserved BOOLEAN NOT NULL DEFAULT FALSE;
 
+CREATE TABLE IF NOT EXISTS public.products (
+  id TEXT PRIMARY KEY,
+  name TEXT NOT NULL CHECK (length(trim(name)) BETWEEN 1 AND 120),
+  sport TEXT NOT NULL CHECK (sport IN ('Football', 'Cricket', 'F1 / Racing')),
+  sport_key TEXT NOT NULL CHECK (sport_key IN ('football', 'cricket', 'racing')),
+  price INTEGER NOT NULL CHECK (price > 0),
+  image TEXT NOT NULL CHECK (length(trim(image)) > 0),
+  badge TEXT NOT NULL DEFAULT '',
+  description TEXT NOT NULL CHECK (length(trim(description)) BETWEEN 1 AND 2000),
+  featured BOOLEAN NOT NULL DEFAULT FALSE,
+  active BOOLEAN NOT NULL DEFAULT TRUE,
+  sizes TEXT[] NOT NULL CHECK (
+    cardinality(sizes) > 0 AND sizes <@ ARRAY['S', 'M', 'L', 'XL', 'XXL']::TEXT[]
+  ),
+  created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+  CHECK (
+    (sport = 'Football' AND sport_key = 'football') OR
+    (sport = 'Cricket' AND sport_key = 'cricket') OR
+    (sport = 'F1 / Racing' AND sport_key = 'racing')
+  )
+);
+
+ALTER TABLE public.products ENABLE ROW LEVEL SECURITY;
+GRANT ALL ON TABLE public.products TO service_role;
+
+INSERT INTO public.products (
+  id, name, sport, sport_key, price, image, badge, description, featured, active, sizes
+) VALUES
+  (
+    'barcelona-home-2026', 'FC Barcelona 2026 home Jersey', 'Football', 'football',
+    1199, '/images/products/barcalona.jpg', 'Bestseller',
+    'Blaugrana heritage with engineered vapor-weave micro-mesh for peak match performance.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  ),
+  (
+    'real-madrid-away-2026', 'Real Madrid 2026 Away Jersey', 'Football', 'football',
+    1199, '/images/products/realmadrid.jpg', 'Top Pick',
+    'Sophisticated obsidian black away edition with metallic gold trim and aeroready comfort.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  ),
+  (
+    'Ac-Milan-2026', 'Ac Milan home kit 2026', 'Football', 'football',
+    1150, '/images/products/acmilan.jpg', 'National Pride',
+    'A classic Rossoneri design featuring the iconic red-and-black stripes. Lightweight, comfortable, and perfect for match days, training, or everyday football style.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  ),
+  (
+    'red-bull-racing-2026', 'Red Bull Racing Official Jersey 2026', 'F1 / Racing', 'racing',
+    1350, '/images/products/redbull.jpg', 'F1 Official',
+    'High-octane motorsport crew kit with aerodynamic raglan sleeves and ergonomic side panels.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  ),
+  (
+    'ferrari-racing-2026', 'Scuderia Ferrari F1 Team Jersey 2026', 'F1 / Racing', 'racing',
+    1350, '/images/products/ferrari.jpg', 'Speed Icon',
+    'Iconic Rosso Corsa red racing silhouette with carbon-styled side panels and gold-piped accents.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  ),
+  (
+    'bangladesh-football-2026', 'Bangladesh National Football Kit 2026', 'Football', 'football',
+    999, '/images/products/bangladeshhome.jpg', 'New Season',
+    'Vibrant forest green match kit featuring dynamic scarlet chest disc and athletic flex hem.',
+    TRUE, TRUE, ARRAY['S', 'M', 'L', 'XL', 'XXL']
+  )
+ON CONFLICT (id) DO NOTHING;
+
+UPDATE public.orders AS existing_order
+SET product_id = product.id
+FROM public.products AS product
+WHERE existing_order.product_id IS NULL
+  AND existing_order.product = product.name;
+
 CREATE TABLE IF NOT EXISTS public.inventory_stock (
   product_id TEXT NOT NULL,
   size TEXT NOT NULL CHECK (size IN ('S', 'M', 'L', 'XL', 'XXL')),
@@ -33,16 +106,73 @@ GRANT ALL ON TABLE public.inventory_stock TO service_role;
 
 INSERT INTO public.inventory_stock (product_id, size, available_quantity)
 SELECT product.id, sizes.size, 0
-FROM (VALUES
-  ('barcelona-home-2026'),
-  ('real-madrid-away-2026'),
-  ('Ac-Milan-2026'),
-  ('red-bull-racing-2026'),
-  ('ferrari-racing-2026'),
-  ('bangladesh-football-2026')
-) AS product(id)
-CROSS JOIN unnest(ARRAY['S', 'M', 'L', 'XL', 'XXL']) AS sizes(size)
+FROM public.products AS product
+CROSS JOIN unnest(product.sizes) AS sizes(size)
 ON CONFLICT (product_id, size) DO NOTHING;
+
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'product-images',
+  'product-images',
+  TRUE,
+  665600,
+  ARRAY['image/png', 'image/jpeg', 'image/webp']
+)
+ON CONFLICT (id) DO NOTHING;
+
+CREATE OR REPLACE FUNCTION public.create_product_with_inventory(
+  p_product JSONB,
+  p_inventory JSONB
+)
+RETURNS JSONB
+LANGUAGE plpgsql
+SECURITY DEFINER
+SET search_path = pg_catalog, public
+AS $$
+DECLARE
+  v_product public.products%ROWTYPE;
+  v_item JSONB;
+BEGIN
+  IF COALESCE(jsonb_typeof(p_product), '') <> 'object' OR
+      COALESCE(jsonb_typeof(p_inventory), '') <> 'array' OR
+      jsonb_array_length(p_inventory) <> cardinality(
+        ARRAY(SELECT jsonb_array_elements_text(p_product->'sizes'))
+      ) THEN
+    RAISE EXCEPTION 'Inventory must provide one quantity for each supported size.'
+      USING ERRCODE = '22023';
+  END IF;
+
+  INSERT INTO public.products (
+    id, name, sport, sport_key, price, image, badge, description, featured, active, sizes
+  )
+  VALUES (
+    p_product->>'id',
+    p_product->>'name',
+    p_product->>'sport',
+    p_product->>'sport_key',
+    (p_product->>'price')::INTEGER,
+    p_product->>'image',
+    COALESCE(p_product->>'badge', ''),
+    p_product->>'description',
+    COALESCE((p_product->>'featured')::BOOLEAN, FALSE),
+    COALESCE((p_product->>'active')::BOOLEAN, TRUE),
+    ARRAY(SELECT jsonb_array_elements_text(p_product->'sizes'))
+  )
+  RETURNING * INTO v_product;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_inventory)
+  LOOP
+    IF NOT (v_item->>'size' = ANY(v_product.sizes)) OR
+        (v_item->>'quantity')::INTEGER < 0 THEN
+      RAISE EXCEPTION 'Invalid initial product inventory.' USING ERRCODE = '22023';
+    END IF;
+    INSERT INTO public.inventory_stock (product_id, size, available_quantity)
+    VALUES (v_product.id, v_item->>'size', (v_item->>'quantity')::INTEGER);
+  END LOOP;
+
+  RETURN to_jsonb(v_product);
+END;
+$$;
 
 CREATE OR REPLACE FUNCTION public.create_inventory_orders(
   p_customer_name TEXT,
@@ -63,9 +193,23 @@ DECLARE
   v_order_ids BIGINT[] := ARRAY[]::BIGINT[];
   v_updated_count INTEGER;
 BEGIN
-  IF jsonb_typeof(p_items) <> 'array' OR jsonb_array_length(p_items) < 1 THEN
+  IF COALESCE(jsonb_typeof(p_items), '') <> 'array' OR jsonb_array_length(p_items) < 1 THEN
     RAISE EXCEPTION 'At least one order item is required.' USING ERRCODE = '22023';
   END IF;
+
+  FOR v_item IN SELECT value FROM jsonb_array_elements(p_items)
+  LOOP
+    PERFORM 1
+    FROM public.products
+    WHERE id = v_item->>'productId'
+      AND active = TRUE
+      AND (v_item->>'size') = ANY(sizes)
+      AND (price::BIGINT * (v_item->>'quantity')::BIGINT) = (v_item->>'total')::BIGINT
+    FOR SHARE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'PRODUCT_UNAVAILABLE' USING ERRCODE = 'P0001';
+    END IF;
+  END LOOP;
 
   FOR v_stock IN
     SELECT
@@ -106,7 +250,8 @@ BEGIN
       p_email,
       p_phone,
       p_address,
-      v_item->>'product',
+      (SELECT product.name FROM public.products AS product
+       WHERE product.id = v_item->>'productId'),
       v_item->>'productId',
       v_item->>'size',
       (v_item->>'quantity')::INTEGER,
@@ -283,6 +428,10 @@ $$;
 REVOKE ALL ON FUNCTION public.create_inventory_orders(TEXT, TEXT, TEXT, TEXT, JSONB)
   FROM PUBLIC, anon, authenticated;
 GRANT EXECUTE ON FUNCTION public.create_inventory_orders(TEXT, TEXT, TEXT, TEXT, JSONB)
+  TO service_role;
+REVOKE ALL ON FUNCTION public.create_product_with_inventory(JSONB, JSONB)
+  FROM PUBLIC, anon, authenticated;
+GRANT EXECUTE ON FUNCTION public.create_product_with_inventory(JSONB, JSONB)
   TO service_role;
 REVOKE ALL ON FUNCTION public.update_pending_inventory_order(BIGINT, INTEGER, INTEGER, TEXT, TEXT)
   FROM PUBLIC, anon, authenticated;

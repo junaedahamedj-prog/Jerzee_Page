@@ -9,6 +9,7 @@ let store;
 let orders;
 let requests;
 let requestBodies;
+let productRows;
 let nextId;
 let inventoryFailuresRemaining;
 const testServiceRoleKey = randomBytes(32).toString('hex');
@@ -17,6 +18,7 @@ test.before(async () => {
   orders = [{ id: 45, status: 'Cancelled' }];
   requests = [];
   requestBodies = [];
+  productRows = [];
   nextId = 46;
   inventoryFailuresRemaining = 0;
   remoteServer = http.createServer(async (req, res) => {
@@ -28,6 +30,25 @@ test.before(async () => {
       res.writeHead(status, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify(body));
     };
+
+    if (url.pathname.startsWith('/storage/v1/object/product-images/') &&
+        req.method === 'POST') {
+      let uploaded = Buffer.alloc(0);
+      for await (const chunk of req) {
+        uploaded = Buffer.concat([uploaded, chunk]);
+      }
+      return respond(200, { uploadedBytes: uploaded.length });
+    }
+
+    if (url.pathname === '/storage/v1/object/product-images' &&
+        req.method === 'DELETE') {
+      let rawBody = '';
+      for await (const chunk of req) {
+        rawBody += chunk;
+      }
+      requestBodies.push({ resource: url.pathname.slice('/storage/v1/'.length), body: JSON.parse(rawBody) });
+      return respond(200, {});
+    }
 
     if (url.pathname === '/rest/v1/orders' && req.method === 'GET') {
       if (query.get('select') === 'id') {
@@ -63,6 +84,13 @@ test.before(async () => {
       }
       const body = JSON.parse(rawBody);
       requestBodies.push({ resource: url.pathname.slice('/rest/v1/'.length), body });
+      if (url.pathname.endsWith('/create_product_with_inventory')) {
+        productRows.push({
+          ...body.p_product,
+          sport_key: body.p_product.sport_key,
+        });
+        return respond(200, productRows[productRows.length - 1]);
+      }
       if (url.pathname.endsWith('/create_inventory_orders')) {
         return respond(200, { orderIds: [201, 202] });
       }
@@ -80,6 +108,22 @@ test.before(async () => {
           low_stock_threshold: 5,
         });
       }
+    }
+
+    if (url.pathname === '/rest/v1/products' && req.method === 'GET') {
+      return respond(200, productRows);
+    }
+
+    if (url.pathname === '/rest/v1/products' && req.method === 'PATCH') {
+      let rawBody = '';
+      for await (const chunk of req) {
+        rawBody += chunk;
+      }
+      const values = JSON.parse(rawBody);
+      const id = query.get('id')?.replace('eq.', '');
+      const product = productRows.find((item) => item.id === id);
+      if (product) Object.assign(product, values);
+      return respond(200, product ? [{ id }] : []);
     }
 
     if (url.pathname === '/rest/v1/orders' && req.method === 'POST') {
@@ -292,4 +336,56 @@ test('Supabase inventory reads retry a transient server failure', async () => {
 
   assert.equal(inventory[0].available_quantity, 4);
   assert.equal(requests.length - requestCount, 2);
+});
+
+test('Supabase product creation uses the atomic inventory RPC and edits leave sizes untouched', async () => {
+  const product = {
+    id: 'new-jersey-id',
+    name: 'New Jersey',
+    sport: 'Football',
+    sportKey: 'football',
+    price: 1600,
+    image: 'https://images.example/new-jersey.jpg',
+    badge: '',
+    description: 'A new jersey.',
+    featured: false,
+    active: true,
+    sizes: ['M'],
+  };
+  await store.createProduct(product, { M: 3 });
+
+  const createCall = requestBodies.find(
+    (call) => call.resource === 'rpc/create_product_with_inventory'
+  );
+  assert.equal(createCall.body.p_product.id, product.id);
+  assert.deepEqual(createCall.body.p_inventory, [{ size: 'M', quantity: 3 }]);
+
+  const loaded = await store.listProducts();
+  assert.equal(loaded[0].sportKey, 'football');
+  assert.equal(loaded[0].active, true);
+  assert.deepEqual(loaded[0].sizes, ['M']);
+
+  await store.updateProduct({ ...product, name: 'Updated Jersey', price: 1700 });
+  assert.equal(productRows[0].name, 'Updated Jersey');
+  assert.equal(productRows[0].price, 1700);
+  assert.deepEqual(productRows[0].sizes, ['M']);
+  assert.ok(requests.every((request) => request.apiKey === testServiceRoleKey));
+});
+
+test('Supabase product images use the configured Storage bucket and can be removed', async () => {
+  const uploaded = await store.uploadProductImage(Buffer.from('image bytes'), 'image/png');
+  assert.match(uploaded.path, /^products\/[0-9a-f-]+\.png$/);
+  assert.match(uploaded.url, /^http:\/\/127\.0\.0\.1:\d+\/storage\/v1\/object\/public\/product-images\//);
+
+  const uploadRequest = requests.find((request) =>
+    request.method === 'POST' &&
+    request.url.pathname === `/storage/v1/object/product-images/${uploaded.path}`
+  );
+  assert.ok(uploadRequest);
+  await store.deleteProductImage(uploaded.path);
+
+  const deleteCall = requestBodies.find(
+    (call) => call.resource === 'object/product-images'
+  );
+  assert.deepEqual(deleteCall.body, { prefixes: [uploaded.path] });
 });

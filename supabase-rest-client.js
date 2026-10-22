@@ -70,6 +70,43 @@ class SupabaseRestClient {
       return data;
     }
   }
+
+  async requestStorage(resource, { method = 'POST', body, contentType = 'application/json' } = {}) {
+    const url = new URL(`/storage/v1/${resource}`, this.baseUrl);
+    const headers = {
+      apikey: this.serviceRoleKey,
+      Authorization: `Bearer ${this.serviceRoleKey}`,
+    };
+    if (contentType) headers['Content-Type'] = contentType;
+
+    const response = await fetch(url, {
+      method,
+      headers,
+      ...(body === undefined ? {} : {
+        body: Buffer.isBuffer(body) || typeof body === 'string' ? body : JSON.stringify(body),
+      }),
+    });
+    const responseText = await response.text();
+    let data = null;
+    if (responseText) {
+      try {
+        data = JSON.parse(responseText);
+      } catch {
+        data = responseText;
+      }
+    }
+    if (!response.ok) {
+      const message = typeof data === 'object' && data?.message
+        ? data.message
+        : `Supabase Storage returned HTTP ${response.status}`;
+      const error = new Error(message);
+      error.status = response.status;
+      error.code = typeof data === 'object' ? data?.statusCode || data?.error : undefined;
+      error.resource = `storage/${resource}`;
+      throw error;
+    }
+    return data;
+  }
 }
 
 module.exports = { SupabaseRestClient };

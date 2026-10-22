@@ -466,10 +466,224 @@
         font-size: 11px;
         font-weight: 800;
       }
+      .products-section { min-width: 0; }
+      .products-toolbar {
+        display: grid;
+        grid-template-columns: minmax(220px, 1fr) 180px 150px auto;
+        gap: 10px;
+        margin-bottom: 14px;
+      }
+      .products-toolbar input, .products-toolbar select, .product-field input,
+      .product-field select, .product-field textarea {
+        width: 100%;
+        min-height: 42px;
+        padding: 10px 12px;
+        border: 1px solid #303036;
+        border-radius: 7px;
+        background: #090909;
+        color: var(--text-primary);
+        font: inherit;
+        font-size: 13px;
+      }
+      .products-toolbar input:focus, .product-field input:focus,
+      .product-field select:focus, .product-field textarea:focus {
+        outline: 2px solid rgba(182, 255, 0, .55);
+        outline-offset: 1px;
+      }
+      .add-product-btn, .product-save-btn {
+        min-height: 42px;
+        padding: 0 16px;
+        border: 1px solid var(--accent-lime);
+        border-radius: 7px;
+        background: var(--accent-lime);
+        color: #050505;
+        font: inherit;
+        font-size: 13px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .add-product-btn:disabled, .product-save-btn:disabled {
+        opacity: .6;
+        cursor: wait;
+      }
+      .products-table-wrapper {
+        overflow-x: auto;
+        background: var(--bg-card);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+      }
+      .products-table { min-width: 900px; }
+      .products-table th, .products-table td { padding: 10px 12px; }
+      .product-thumb {
+        width: 46px;
+        height: 46px;
+        object-fit: contain;
+        background: #090909;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+      }
+      .product-name { max-width: 240px; font-weight: 800; }
+      .product-category, .product-state, .product-size-stock {
+        display: inline-block;
+        padding: 4px 7px;
+        border: 1px solid var(--border);
+        border-radius: 5px;
+        font-size: 10px;
+        font-weight: 800;
+        white-space: nowrap;
+      }
+      .product-category { color: var(--accent-lime); border-color: rgba(182, 255, 0, .25); }
+      .product-state.active { color: var(--accent-lime); background: rgba(182, 255, 0, .08); }
+      .product-state.inactive { color: #ff9b9b; background: rgba(255, 82, 82, .08); }
+      .product-size-stock { margin: 2px; color: var(--text-secondary); }
+      .product-actions { display: flex; gap: 6px; }
+      .product-edit-btn, .product-status-btn {
+        min-height: 32px;
+        padding: 0 10px;
+        border: 1px solid rgba(182, 255, 0, .28);
+        border-radius: 6px;
+        background: rgba(182, 255, 0, .08);
+        color: var(--accent-lime);
+        font: inherit;
+        font-size: 11px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .product-status-btn.deactivate {
+        color: #ff8a8a;
+        border-color: rgba(255, 82, 82, .25);
+        background: rgba(255, 82, 82, .08);
+      }
+      .products-message {
+        margin: 0 0 14px;
+        padding: 11px 13px;
+        border: 1px solid rgba(182, 255, 0, .25);
+        border-radius: 8px;
+        background: rgba(182, 255, 0, .07);
+        color: var(--accent-lime);
+        font-size: 13px;
+        font-weight: 700;
+      }
+      .products-message.error { color: #ff9b9b; border-color: rgba(255, 82, 82, .4); background: rgba(255, 82, 82, .07); }
+      .products-message[hidden] { display: none; }
+      .products-pagination {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        gap: 10px;
+        margin-top: 12px;
+        color: var(--text-secondary);
+        font-size: 12px;
+      }
+      .products-pagination button, .product-cancel-btn {
+        min-height: 38px;
+        padding: 0 13px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #181818;
+        color: #fff;
+        font: inherit;
+        font-size: 12px;
+        font-weight: 800;
+        cursor: pointer;
+      }
+      .products-pagination button:disabled { opacity: .45; cursor: not-allowed; }
+      .product-drawer {
+        position: fixed;
+        inset: 0 0 0 auto;
+        width: min(540px, 100%);
+        height: 100%;
+        max-height: none;
+        margin: 0 0 0 auto;
+        padding: 0;
+        border: 1px solid rgba(255, 255, 255, .12);
+        border-right: 0;
+        background: #0c0c0e;
+        color: var(--text-primary);
+        box-shadow: -24px 0 70px rgba(0, 0, 0, .55);
+      }
+      .product-drawer[open] { display: flex; flex-direction: column; }
+      .product-drawer::backdrop { background: rgba(0, 0, 0, .78); backdrop-filter: blur(3px); }
+      .product-drawer-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        padding: 20px 22px;
+        border-bottom: 1px solid var(--border);
+      }
+      .product-drawer-header h2 { font-family: 'Outfit', sans-serif; font-size: 20px; }
+      .product-drawer-close {
+        width: 38px;
+        height: 38px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #151515;
+        color: #fff;
+        font-size: 20px;
+        cursor: pointer;
+      }
+      .product-form { display: flex; min-height: 0; flex: 1; flex-direction: column; }
+      .product-form-content { overflow: auto; flex: 1; padding: 20px 22px; }
+      .product-form-section { margin-bottom: 24px; }
+      .product-form-section h3 {
+        margin-bottom: 14px;
+        color: var(--accent-lime);
+        font-family: 'Outfit', sans-serif;
+        font-size: 13px;
+        letter-spacing: 1px;
+        text-transform: uppercase;
+      }
+      .product-field { margin-bottom: 13px; }
+      .product-field label, .product-field-label {
+        display: block;
+        margin-bottom: 6px;
+        color: #e5e5e5;
+        font-size: 12px;
+        font-weight: 800;
+      }
+      .product-field textarea { min-height: 92px; resize: vertical; }
+      .product-field input[type="file"] { padding: 8px; }
+      .product-field-error { min-height: 0; margin-top: 5px; color: #ff9b9b; font-size: 11px; }
+      .product-field-error:empty { display: none; }
+      .size-inventory-list { display: grid; gap: 8px; }
+      .size-inventory-row {
+        display: grid;
+        grid-template-columns: 28px 1fr 132px;
+        align-items: center;
+        gap: 8px;
+        padding: 8px 10px;
+        border: 1px solid var(--border);
+        border-radius: 7px;
+        background: #090909;
+      }
+      .size-inventory-row label { margin: 0; font-size: 12px; font-weight: 800; }
+      .size-inventory-row input[type="checkbox"] { accent-color: var(--accent-lime); }
+      .size-inventory-row input[type="number"] { min-height: 34px; }
+      .size-inventory-row input:disabled { opacity: .45; }
+      .product-form-note { margin-top: 9px; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+      .product-image-preview { display: block; width: 96px; height: 96px; margin-top: 10px; object-fit: contain; border: 1px solid var(--border); border-radius: 8px; background: #080808; }
+      .product-form-actions {
+        display: flex;
+        justify-content: flex-end;
+        gap: 9px;
+        padding: 14px 22px;
+        border-top: 1px solid var(--border);
+      }
       @media (max-width: 900px) {
         body { padding: 20px; }
         .table-wrapper { overflow-x: auto; }
         table { min-width: 760px; }
+        .products-toolbar { grid-template-columns: minmax(180px, 1fr) 1fr; }
+      }
+      @media (max-width: 560px) {
+        body { padding: 14px; }
+        header { align-items: flex-start; }
+        .actions-group { width: 100%; flex-wrap: wrap; }
+        .dashboard-tabs { overflow-x: auto; }
+        .dashboard-tab { flex: 0 0 auto; }
+        .products-toolbar { grid-template-columns: 1fr; }
+        .product-drawer-header, .product-form-content { padding-right: 16px; padding-left: 16px; }
+        .product-form-actions { padding-right: 16px; padding-left: 16px; }
       }
     </style>
   </head>
@@ -494,6 +708,8 @@
         aria-controls="stockPanel" aria-selected="true">Stock</button>
       <button type="button" class="dashboard-tab" id="ordersTab" role="tab"
         aria-controls="ordersPanel" aria-selected="false" tabindex="-1">Order Processing</button>
+      <button type="button" class="dashboard-tab" id="productsTab" role="tab"
+        aria-controls="productsPanel" aria-selected="false" tabindex="-1">Products</button>
     </nav>
 
     <section class="dashboard-panel inventory-section" id="stockPanel" role="tabpanel"
@@ -566,6 +782,130 @@
       </div>
     </section>
 
+    <section class="dashboard-panel products-section" id="productsPanel" role="tabpanel"
+      aria-labelledby="productsTab" hidden>
+      <div class="inventory-heading">
+        <div>
+          <h2>Product Management</h2>
+          <p>Add, edit, and manage products. Active products appear on the storefront.</p>
+        </div>
+        <button type="button" class="add-product-btn" id="addProductBtn">＋ Add New Product</button>
+      </div>
+      <div id="productsStatus" class="products-message" role="status" aria-live="polite" hidden></div>
+      <div class="products-toolbar">
+        <input id="productSearch" type="search" aria-label="Search products by name"
+          placeholder="Search products..." autocomplete="off" />
+        <select id="productCategoryFilter" aria-label="Filter products by category">
+          <option value="">All categories</option>
+          <option value="Football">Football</option>
+          <option value="Cricket">Cricket</option>
+          <option value="F1 / Racing">F1 / Racing</option>
+        </select>
+        <select id="productStatusFilter" aria-label="Filter products by status">
+          <option value="">All statuses</option>
+          <option value="active">Active</option>
+          <option value="inactive">Inactive</option>
+        </select>
+        <button type="button" class="product-cancel-btn" id="clearProductFilters">Clear</button>
+      </div>
+      <div class="products-table-wrapper">
+        <table class="products-table">
+          <thead>
+            <tr>
+              <th>Image</th><th>Name</th><th>Category</th><th>Price (BDT)</th>
+              <th>Sizes (Stock)</th><th>Status</th><th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="productRows">
+            <tr><td colspan="7" style="padding:36px;text-align:center;color:var(--text-secondary);">Loading products...</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <div class="products-pagination">
+        <span id="productCount" aria-live="polite">Loading products...</span>
+        <div>
+          <button type="button" id="previousProductsPage" disabled>Previous</button>
+          <span id="productPage" style="margin:0 8px;">1 / 1</span>
+          <button type="button" id="nextProductsPage" disabled>Next</button>
+        </div>
+      </div>
+    </section>
+
+    <dialog id="productDrawer" class="product-drawer" aria-labelledby="productDrawerTitle">
+      <div class="product-drawer-header">
+        <h2 id="productDrawerTitle">Add New Product</h2>
+        <button type="button" class="product-drawer-close" id="closeProductDrawer"
+          aria-label="Close product form">×</button>
+      </div>
+      <form id="productForm" class="product-form" novalidate>
+        <div class="product-form-content">
+          <section class="product-form-section" aria-labelledby="productBasicHeading">
+            <h3 id="productBasicHeading">Basic Info</h3>
+            <div class="product-field">
+              <label for="productName">Product name *</label>
+              <input id="productName" name="name" type="text" maxlength="120" required />
+              <div id="productNameError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
+              <label for="productCategory">Category *</label>
+              <select id="productCategory" name="category" required>
+                <option value="">Choose a category</option>
+                <option value="Football">Football</option>
+                <option value="Cricket">Cricket</option>
+                <option value="F1 / Racing">F1 / Racing</option>
+              </select>
+              <div id="productCategoryError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
+              <label for="productPrice">Price (BDT) *</label>
+              <input id="productPrice" name="price" type="number" min="1" max="2147483647" step="1" required />
+              <div id="productPriceError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
+              <label for="productDescription">Description *</label>
+              <textarea id="productDescription" name="description" maxlength="2000" required></textarea>
+              <div id="productDescriptionError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
+              <label for="productStatus">Status *</label>
+              <select id="productStatus" name="active" required>
+                <option value="true">Active</option>
+                <option value="false">Inactive</option>
+              </select>
+              <div id="productActiveError" class="product-field-error" role="alert"></div>
+            </div>
+          </section>
+          <section class="product-form-section" aria-labelledby="productSizesHeading">
+            <h3 id="productSizesHeading">Sizes &amp; Stock</h3>
+            <div id="productSizes" class="size-inventory-list"></div>
+            <p id="productSizesNote" class="product-form-note"></p>
+            <div id="productSizesError" class="product-field-error" role="alert"></div>
+          </section>
+          <section class="product-form-section" aria-labelledby="productImageHeading">
+            <h3 id="productImageHeading">Image</h3>
+            <div class="product-field">
+              <label for="productImageUrl">Image URL</label>
+              <input id="productImageUrl" name="imageUrl" type="url" maxlength="2048"
+                placeholder="https://example.com/jersey.jpg" />
+              <div id="productImageUrlError" class="product-field-error" role="alert"></div>
+            </div>
+            <div class="product-field">
+              <label for="productImageFile">Or upload PNG, JPEG, or WebP (max 650 KB)</label>
+              <input id="productImageFile" name="imageFile" type="file"
+                accept="image/png,image/jpeg,image/webp" />
+              <div id="productImageFileError" class="product-field-error" role="alert"></div>
+              <img id="productImagePreview" class="product-image-preview" alt="Product image preview" hidden />
+            </div>
+          </section>
+          <div id="productFormError" class="products-message error" role="alert" hidden></div>
+        </div>
+        <div class="product-form-actions">
+          <button type="button" class="product-cancel-btn" id="cancelProductForm">Cancel</button>
+          <button type="submit" class="product-save-btn" id="saveProductBtn">Save Product</button>
+        </div>
+      </form>
+    </dialog>
+
     <dialog id="deleteOrderDialog" class="delete-dialog" aria-labelledby="deleteDialogTitle">
       <div class="delete-dialog-content">
         <div class="delete-dialog-label">Permanent action</div>
@@ -618,6 +958,12 @@
       let inventoryUpdateInProgress = false;
       let orderPendingDeletion = null;
       let deleteDialogTrigger = null;
+      let productsLoadInProgress = false;
+      let productSaveInProgress = false;
+      let products = [];
+      let productsPage = 1;
+      let productDrawerTrigger = null;
+      const productPageSize = 8;
       async function loadInventory() {
         if (inventoryLoadInProgress) return;
         inventoryLoadInProgress = true;
@@ -941,6 +1287,375 @@
         }
       }
 
+      function showProductsStatus(message, tone = 'success') {
+        const status = document.getElementById('productsStatus');
+        status.textContent = message;
+        status.classList.toggle('error', tone === 'error');
+        status.hidden = false;
+      }
+
+      function filteredProducts() {
+        const query = document.getElementById('productSearch').value.trim().toLowerCase();
+        const category = document.getElementById('productCategoryFilter').value;
+        const status = document.getElementById('productStatusFilter').value;
+        return products.filter((product) =>
+          (!query || product.name.toLowerCase().includes(query)) &&
+          (!category || product.sport === category) &&
+          (!status || (product.active ? 'active' : 'inactive') === status)
+        );
+      }
+
+      function renderProducts() {
+        const rows = document.getElementById('productRows');
+        const filtered = filteredProducts();
+        const pageCount = Math.max(1, Math.ceil(filtered.length / productPageSize));
+        productsPage = Math.min(productsPage, pageCount);
+        const start = (productsPage - 1) * productPageSize;
+        const pageItems = filtered.slice(start, start + productPageSize);
+
+        document.getElementById('productCount').textContent = filtered.length
+          ? `Showing ${start + 1}-${start + pageItems.length} of ${filtered.length} products`
+          : 'No products match these filters.';
+        document.getElementById('productPage').textContent = `${productsPage} / ${pageCount}`;
+        document.getElementById('previousProductsPage').disabled = productsPage <= 1;
+        document.getElementById('nextProductsPage').disabled = productsPage >= pageCount;
+
+        if (!pageItems.length) {
+          rows.innerHTML = `<tr><td colspan="7" style="padding:36px;text-align:center;color:var(--text-secondary);">
+            ${products.length ? 'No products match your search or filters.' : 'No products found. Add your first product to get started.'}
+          </td></tr>`;
+          return;
+        }
+
+        rows.innerHTML = pageItems.map((product) => {
+          const stockBySize = new Map((product.availability || [])
+            .map((stock) => [stock.size, Number(stock.availableQuantity)]));
+          const sizeSummary = (product.sizes || []).map((size) =>
+            `<span class="product-size-stock">${escapeHtml(size)} ${stockBySize.get(size) || 0}</span>`
+          ).join('');
+          return `
+            <tr>
+              <td><img class="product-thumb" src="${escapeHtml(product.image)}"
+                alt="${escapeHtml(product.name)}" loading="lazy"
+                onerror="this.onerror=null;this.src='/images/jerzee-mark.png';" /></td>
+              <td class="product-name">${escapeHtml(product.name)}</td>
+              <td><span class="product-category">${escapeHtml(product.sport)}</span></td>
+              <td>৳${Number(product.price).toLocaleString('en-BD')}</td>
+              <td>${sizeSummary || '—'}</td>
+              <td><span class="product-state ${product.active ? 'active' : 'inactive'}">
+                ${product.active ? 'Active' : 'Inactive'}
+              </span></td>
+              <td><div class="product-actions">
+                <button type="button" class="product-edit-btn" data-action="edit"
+                  data-product-id="${escapeHtml(product.id)}">Edit</button>
+                <button type="button" class="product-status-btn ${product.active ? 'deactivate' : ''}"
+                  data-action="toggle" data-product-id="${escapeHtml(product.id)}">
+                  ${product.active ? 'Deactivate' : 'Activate'}
+                </button>
+              </div></td>
+            </tr>
+          `;
+        }).join('');
+      }
+
+      async function loadProducts({ silent = false } = {}) {
+        if (productsLoadInProgress) return;
+        productsLoadInProgress = true;
+        const rows = document.getElementById('productRows');
+        if (!products.length) {
+          rows.innerHTML = `<tr><td colspan="7" style="padding:36px;text-align:center;color:var(--text-secondary);">Loading products...</td></tr>`;
+        }
+        try {
+          const response = await fetch('/api/admin/products', { cache: 'no-store' });
+          if (response.status === 401) {
+            window.location.assign('/admin/login');
+            return;
+          }
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || `Products API returned ${response.status}`);
+          products = result;
+          renderProducts();
+          if (!silent) document.getElementById('productsStatus').hidden = true;
+        } catch (error) {
+          console.error('Failed to load products:', error);
+          rows.innerHTML = `<tr><td colspan="7" style="padding:36px;text-align:center;color:#ff9b9b;">
+            ${escapeHtml(error.message || 'Could not load products. Please try again.')}
+          </td></tr>`;
+          document.getElementById('productCount').textContent = 'Products could not be loaded.';
+          if (!silent) showProductsStatus(error.message || 'Could not load products. Please try again.', 'error');
+        } finally {
+          productsLoadInProgress = false;
+        }
+      }
+
+      function setProductFieldErrors(fields = {}) {
+        const fieldIds = {
+          name: 'productNameError',
+          description: 'productDescriptionError',
+          category: 'productCategoryError',
+          price: 'productPriceError',
+          active: 'productActiveError',
+          imageUrl: 'productImageUrlError',
+          imageFile: 'productImageFileError',
+          sizes: 'productSizesError',
+          initialStock: 'productSizesError',
+        };
+        Object.entries(fields).forEach(([field, message]) => {
+          const id = fieldIds[field] || (field.startsWith('stock-') ? 'productSizesError' : '');
+          if (id) document.getElementById(id).textContent = message;
+        });
+      }
+
+      function clearProductFormErrors() {
+        document.querySelectorAll('#productForm .product-field-error')
+          .forEach((element) => { element.textContent = ''; });
+        const formError = document.getElementById('productFormError');
+        formError.textContent = '';
+        formError.hidden = true;
+      }
+
+      function openProductDrawer(product = null, trigger = document.activeElement) {
+        const dialog = document.getElementById('productDrawer');
+        const form = document.getElementById('productForm');
+        clearProductFormErrors();
+        form.reset();
+        form.dataset.productId = product?.id || '';
+        productDrawerTrigger = trigger;
+        document.getElementById('productDrawerTitle').textContent =
+          product ? 'Edit Product' : 'Add New Product';
+        document.getElementById('saveProductBtn').textContent =
+          product ? 'Save Changes' : 'Save Product';
+        document.getElementById('productName').value = product?.name || '';
+        document.getElementById('productCategory').value = product?.sport || '';
+        document.getElementById('productPrice').value = product?.price ?? '';
+        document.getElementById('productDescription').value = product?.description || '';
+        document.getElementById('productStatus').value = product?.active === false ? 'false' : 'true';
+        document.getElementById('productImageUrl').value = product?.image || '';
+        const preview = document.getElementById('productImagePreview');
+        preview.hidden = !product?.image;
+        preview.src = product?.image || '';
+
+        const sizeContainer = document.getElementById('productSizes');
+        const sizes = product ? product.sizes : ['S', 'M', 'L', 'XL', 'XXL'];
+        const stockBySize = new Map((product?.availability || [])
+          .map((stock) => [stock.size, Number(stock.availableQuantity)]));
+        sizeContainer.innerHTML = sizes.map((size) => product
+          ? `<div class="size-inventory-row">
+              <input type="checkbox" checked disabled aria-label="Size ${escapeHtml(size)} is supported" />
+              <label>${escapeHtml(size)}</label>
+              <span class="product-size-stock">${stockBySize.get(size) || 0} available</span>
+            </div>`
+          : `<div class="size-inventory-row">
+              <input class="product-size-checkbox" type="checkbox" value="${escapeHtml(size)}"
+                id="newSize${escapeHtml(size)}" aria-label="Include size ${escapeHtml(size)}" />
+              <label for="newSize${escapeHtml(size)}">${escapeHtml(size)}</label>
+              <input class="product-initial-stock" type="number" min="0" max="2147483647" step="1"
+                data-size="${escapeHtml(size)}" aria-label="Initial stock for size ${escapeHtml(size)}"
+                placeholder="Initial stock" disabled />
+            </div>`
+        ).join('');
+        document.getElementById('productSizesNote').textContent = product
+          ? 'Supported sizes are unchanged here. Use the Stock tab for all quantity changes.'
+          : 'Choose the supported sizes and set starting quantities. Later stock changes belong in the Stock tab.';
+        sizeContainer.querySelectorAll('.product-size-checkbox').forEach((checkbox) => {
+          checkbox.addEventListener('change', () => {
+            const input = sizeContainer.querySelector(`.product-initial-stock[data-size="${checkbox.value}"]`);
+            input.disabled = !checkbox.checked;
+            input.required = checkbox.checked;
+          });
+        });
+        dialog.showModal();
+        document.getElementById('productName').focus();
+      }
+
+      function closeProductDrawer() {
+        const dialog = document.getElementById('productDrawer');
+        if (dialog.open) dialog.close();
+        if (productDrawerTrigger?.isConnected) productDrawerTrigger.focus();
+        productDrawerTrigger = null;
+      }
+
+      function readImageFile(file) {
+        return new Promise((resolve, reject) => {
+          const reader = new FileReader();
+          reader.addEventListener('load', () => {
+            const result = String(reader.result || '');
+            const separator = result.indexOf(',');
+            if (separator < 0) return reject(new Error('The selected image could not be read.'));
+            resolve(result.slice(separator + 1));
+          }, { once: true });
+          reader.addEventListener('error', () => reject(new Error('The selected image could not be read.')), { once: true });
+          reader.readAsDataURL(file);
+        });
+      }
+
+      async function saveProduct(event) {
+        event.preventDefault();
+        if (productSaveInProgress) return;
+        clearProductFormErrors();
+        const form = document.getElementById('productForm');
+        if (!form.reportValidity()) return;
+
+        const editingId = form.dataset.productId || '';
+        const file = document.getElementById('productImageFile').files[0];
+        const payload = {
+          name: document.getElementById('productName').value.trim(),
+          category: document.getElementById('productCategory').value,
+          price: Number(document.getElementById('productPrice').value),
+          description: document.getElementById('productDescription').value.trim(),
+          active: document.getElementById('productStatus').value === 'true',
+          imageUrl: document.getElementById('productImageUrl').value.trim(),
+        };
+        if (!editingId) {
+          const selectedSizes = [...document.querySelectorAll('.product-size-checkbox:checked')]
+            .map((checkbox) => checkbox.value);
+          payload.sizes = selectedSizes;
+          payload.initialStock = {};
+          for (const size of selectedSizes) {
+            const input = document.querySelector(`.product-initial-stock[data-size="${size}"]`);
+            if (!input.value.trim() || !Number.isSafeInteger(Number(input.value)) || Number(input.value) < 0) {
+              document.getElementById('productSizesError').textContent =
+                `Enter a non-negative whole-number stock for size ${size}.`;
+              input.focus();
+              return;
+            }
+            payload.initialStock[size] = Number(input.value);
+          }
+        }
+
+        productSaveInProgress = true;
+        const saveButton = document.getElementById('saveProductBtn');
+        saveButton.disabled = true;
+        saveButton.textContent = 'Saving...';
+        try {
+          if (file) {
+            if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type) ||
+                file.size > 650 * 1024) {
+              setProductFieldErrors({
+                imageFile: 'Choose a PNG, JPEG, or WebP image no larger than 650 KB.',
+              });
+              return;
+            }
+            payload.imageFile = { contentType: file.type, data: await readImageFile(file) };
+          }
+          const response = await fetch(editingId
+            ? `/api/admin/products/${encodeURIComponent(editingId)}`
+            : '/api/admin/products', {
+            method: editingId ? 'PATCH' : 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+            cache: 'no-store',
+          });
+          if (response.status === 401) {
+            window.location.assign('/admin/login');
+            return;
+          }
+          const result = await response.json();
+          if (!response.ok) {
+            setProductFieldErrors(result.fields);
+            throw new Error(result.error || 'Product could not be saved.');
+          }
+          closeProductDrawer();
+          await loadProducts({ silent: true });
+          showProductsStatus(editingId ? 'Product updated successfully.' : 'Product created successfully.');
+        } catch (error) {
+          console.error('Product save failed:', error);
+          const formError = document.getElementById('productFormError');
+          formError.textContent = error.message || 'Product could not be saved. Please try again.';
+          formError.hidden = false;
+        } finally {
+          productSaveInProgress = false;
+          saveButton.disabled = false;
+          saveButton.textContent = editingId ? 'Save Changes' : 'Save Product';
+        }
+      }
+
+      async function toggleProductStatus(product, button) {
+        const active = !product.active;
+        if (!active && !window.confirm(
+          `Deactivate "${product.name}"? Customers will no longer be able to purchase it. Existing orders and stock will be preserved.`
+        )) return;
+        button.disabled = true;
+        try {
+          const response = await fetch(`/api/admin/products/${encodeURIComponent(product.id)}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              name: product.name,
+              category: product.sport,
+              price: Number(product.price),
+              description: product.description,
+              active,
+              imageUrl: product.image,
+            }),
+            cache: 'no-store',
+          });
+          if (response.status === 401) {
+            window.location.assign('/admin/login');
+            return;
+          }
+          const result = await response.json();
+          if (!response.ok) throw new Error(result.error || 'Product status could not be changed.');
+          await loadProducts({ silent: true });
+          showProductsStatus(active ? 'Product activated.' : 'Product deactivated.');
+        } catch (error) {
+          console.error('Product status update failed:', error);
+          showProductsStatus(error.message || 'Product status could not be changed.', 'error');
+          button.disabled = false;
+        }
+      }
+
+      document.getElementById('productRows').addEventListener('click', (event) => {
+        const button = event.target.closest('button[data-action]');
+        if (!button) return;
+        const product = products.find((item) => item.id === button.dataset.productId);
+        if (!product) return;
+        if (button.dataset.action === 'edit') openProductDrawer(product, button);
+        if (button.dataset.action === 'toggle') void toggleProductStatus(product, button);
+      });
+      document.getElementById('productSearch').addEventListener('input', () => {
+        productsPage = 1;
+        renderProducts();
+      });
+      ['productCategoryFilter', 'productStatusFilter'].forEach((id) => {
+        document.getElementById(id).addEventListener('change', () => {
+          productsPage = 1;
+          renderProducts();
+        });
+      });
+      document.getElementById('clearProductFilters').addEventListener('click', () => {
+        document.getElementById('productSearch').value = '';
+        document.getElementById('productCategoryFilter').value = '';
+        document.getElementById('productStatusFilter').value = '';
+        productsPage = 1;
+        renderProducts();
+      });
+      document.getElementById('previousProductsPage').addEventListener('click', () => {
+        productsPage -= 1;
+        renderProducts();
+      });
+      document.getElementById('nextProductsPage').addEventListener('click', () => {
+        productsPage += 1;
+        renderProducts();
+      });
+      document.getElementById('addProductBtn').addEventListener('click', (event) => {
+        openProductDrawer(null, event.currentTarget);
+      });
+      document.getElementById('productForm').addEventListener('submit', saveProduct);
+      document.getElementById('cancelProductForm').addEventListener('click', closeProductDrawer);
+      document.getElementById('closeProductDrawer').addEventListener('click', closeProductDrawer);
+      document.getElementById('productDrawer').addEventListener('click', (event) => {
+        if (event.target === event.currentTarget && !productSaveInProgress) closeProductDrawer();
+      });
+      document.getElementById('productImageFile').addEventListener('change', (event) => {
+        const file = event.target.files[0];
+        if (!file) return;
+        const preview = document.getElementById('productImagePreview');
+        preview.src = URL.createObjectURL(file);
+        preview.hidden = false;
+        document.getElementById('productImageFileError').textContent = '';
+      });
+
       document.getElementById('inventoryRows').addEventListener('click', async (event) => {
         const saveButton = event.target.closest('.stock-save-btn');
         if (!saveButton || inventoryUpdateInProgress) return;
@@ -985,15 +1700,18 @@
       });
 
       document.getElementById('refreshBtn').addEventListener('click', () => {
-        if (document.getElementById('stockPanel').hidden) {
+        if (!document.getElementById('ordersPanel').hidden) {
           void loadOrders();
+        } else if (!document.getElementById('productsPanel').hidden) {
+          void loadProducts();
         } else {
           void loadInventory();
         }
       });
       const dashboardTabs = [
         { button: document.getElementById('stockTab'), panel: document.getElementById('stockPanel') },
-        { button: document.getElementById('ordersTab'), panel: document.getElementById('ordersPanel') }
+        { button: document.getElementById('ordersTab'), panel: document.getElementById('ordersPanel') },
+        { button: document.getElementById('productsTab'), panel: document.getElementById('productsPanel') }
       ];
       function activateDashboardTab(activeTab, moveFocus = false) {
         dashboardTabs.forEach(({ button, panel }) => {
@@ -1007,8 +1725,10 @@
           .scrollIntoView({ behavior: 'smooth', block: 'start' });
         if (activeTab.id === 'stockTab') {
           void loadInventory({ silent: true });
-        } else {
+        } else if (activeTab.id === 'ordersTab') {
           void loadOrders({ silent: true });
+        } else {
+          void loadProducts({ silent: true });
         }
       }
       dashboardTabs.forEach(({ button }, index) => {
@@ -1044,8 +1764,10 @@
       window.setInterval(() => {
         if (document.hidden) return;
         if (document.activeElement?.matches('.stock-input, .pending-quantity')) return;
-        if (document.getElementById('stockPanel').hidden) {
+        if (!document.getElementById('ordersPanel').hidden) {
           void loadOrders({ silent: true });
+        } else if (!document.getElementById('productsPanel').hidden) {
+          void loadProducts({ silent: true });
         } else {
           void loadInventory({ silent: true });
         }

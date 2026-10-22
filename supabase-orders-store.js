@@ -1,4 +1,21 @@
 const { SupabaseRestClient } = require('./supabase-rest-client');
+const { randomUUID } = require('crypto');
+
+function productFromRow(row) {
+  return {
+    id: row.id,
+    name: row.name,
+    sport: row.sport,
+    sportKey: row.sport_key,
+    price: Number(row.price),
+    image: row.image,
+    badge: row.badge || '',
+    description: row.description,
+    featured: Boolean(row.featured),
+    active: Boolean(row.active),
+    sizes: Array.isArray(row.sizes) ? row.sizes : [],
+  };
+}
 
 class SupabaseOrdersStore {
   constructor() {
@@ -69,6 +86,100 @@ class SupabaseOrdersStore {
         select: 'product_id,size,available_quantity,low_stock_threshold,updated_at',
         order: 'product_id.asc,size.asc',
       },
+    });
+  }
+
+  async listProducts() {
+    const products = [];
+    const pageSize = 1000;
+    let offset = 0;
+    while (true) {
+      const rows = await this.getClient().request('products', {
+        query: {
+          select: 'id,name,sport,sport_key,price,image,badge,description,featured,active,sizes,created_at,updated_at',
+          order: 'created_at.asc,id.asc',
+          limit: String(pageSize),
+          offset: String(offset),
+        },
+      });
+      products.push(...rows.map(productFromRow));
+      if (rows.length < pageSize) return products;
+      offset += pageSize;
+    }
+  }
+
+  async createProduct(product, initialStock) {
+    const data = await this.getClient().request('rpc/create_product_with_inventory', {
+      method: 'POST',
+      body: {
+        p_product: {
+          id: product.id,
+          name: product.name,
+          sport: product.sport,
+          sport_key: product.sportKey,
+          price: product.price,
+          image: product.image,
+          badge: product.badge,
+          description: product.description,
+          featured: product.featured,
+          active: product.active,
+          sizes: product.sizes,
+        },
+        p_inventory: product.sizes.map((size) => ({ size, quantity: initialStock[size] })),
+      },
+    });
+    return Array.isArray(data) ? data[0] || null : data;
+  }
+
+  async updateProduct(product) {
+    const rows = await this.getClient().request('products', {
+      method: 'PATCH',
+      query: { id: `eq.${product.id}`, select: 'id' },
+      prefer: 'return=representation',
+      body: {
+        name: product.name,
+        sport: product.sport,
+        sport_key: product.sportKey,
+        price: product.price,
+        image: product.image,
+        badge: product.badge,
+        description: product.description,
+        featured: product.featured,
+        active: product.active,
+        updated_at: new Date().toISOString(),
+      },
+    });
+    return Array.isArray(rows) && rows.length > 0;
+  }
+
+  async uploadProductImage(buffer, contentType) {
+    const extensions = {
+      'image/png': 'png',
+      'image/jpeg': 'jpg',
+      'image/webp': 'webp',
+    };
+    const extension = extensions[contentType];
+    if (!extension) {
+      const error = new Error('Unsupported product image type.');
+      error.code = 'INVALID_PRODUCT_IMAGE';
+      throw error;
+    }
+    const objectPath = `products/${randomUUID()}.${extension}`;
+    await this.getClient().requestStorage(
+      `object/product-images/${objectPath}`,
+      { method: 'POST', body: buffer, contentType }
+    );
+    const baseUrl = this.getClient().baseUrl;
+    return {
+      path: objectPath,
+      url: new URL(`/storage/v1/object/public/product-images/${objectPath}`, baseUrl).toString(),
+    };
+  }
+
+  async deleteProductImage(objectPath) {
+    await this.getClient().requestStorage('object/product-images', {
+      method: 'DELETE',
+      body: { prefixes: [objectPath] },
     });
   }
 

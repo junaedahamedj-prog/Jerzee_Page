@@ -252,7 +252,7 @@ async function fetchProducts() {
         const response = await fetch('/api/products');
         if (response.ok) {
           const data = await response.json();
-          if (Array.isArray(data) && data.length > 0) {
+          if (Array.isArray(data)) {
             AppState.products = data;
           }
         }
@@ -357,27 +357,27 @@ function renderProducts() {
       : 'unavailable';
 
     return `
-      <article class="product-card" data-product-id="${product.id}">
+      <article class="product-card" data-product-id="${escapeHtml(product.id)}">
         <div class="product-image-wrap">
-          <img src="${product.image}" alt="${product.name}" class="product-img" loading="lazy" onerror="this.src='/images/products/barcelona.jpg'" />
-          ${product.badge ? `<span class="product-badge">${product.badge}</span>` : ''}
-          <span class="product-sport-tag">${product.sport}</span>
+          <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" class="product-img" loading="lazy" onerror="this.src='/images/products/barcalona.jpg'" />
+          ${product.badge ? `<span class="product-badge">${escapeHtml(product.badge)}</span>` : ''}
+          <span class="product-sport-tag">${escapeHtml(product.sport)}</span>
         </div>
 
         <div class="product-info">
-          <h3 class="product-title">${product.name}</h3>
-          <p class="product-desc">${product.description || 'Premium match kit with dry-wicking athletic mesh.'}</p>
+          <h3 class="product-title">${escapeHtml(product.name)}</h3>
+          <p class="product-desc">${escapeHtml(product.description || 'Premium match kit with dry-wicking athletic mesh.')}</p>
 
           <div class="size-selector">
             <div class="size-label">
               <span>Select Size</span>
               <span class="accent-lime">${selectedSize}</span>
             </div>
-            <div class="size-chips" data-product-id="${product.id}">
+            <div class="size-chips" data-product-id="${escapeHtml(product.id)}">
               ${sizes.map(size => `
                 <button type="button" class="size-chip ${size === selectedSize ? 'selected' : ''} ${availabilityKnown && !sizeIsAvailable(size) ? 'sold-out' : ''}"
-                  data-size="${size}" ${availabilityKnown && !sizeIsAvailable(size) ? 'disabled aria-label="' + size + ', out of stock"' : ''}>
-                  ${size}
+                  data-size="${escapeHtml(size)}" ${availabilityKnown && !sizeIsAvailable(size) ? 'disabled aria-label="' + escapeHtml(size) + ', out of stock"' : ''}>
+                  ${escapeHtml(size)}
                 </button>
               `).join('')}
             </div>
@@ -390,7 +390,7 @@ function renderProducts() {
               <span class="currency">৳</span>${Number(product.price).toLocaleString('en-BD')}
             </div>
             <div class="product-card-actions">
-              <button type="button" class="btn-card-cart" data-action="cart" data-id="${product.id}" title="Add to Cart" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
+              <button type="button" class="btn-card-cart" data-action="cart" data-id="${escapeHtml(product.id)}" title="Add to Cart" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
                 <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                   <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
                   <line x1="3" y1="6" x2="21" y2="6"></line>
@@ -398,7 +398,7 @@ function renderProducts() {
                 </svg>
                 <span>Add</span>
               </button>
-              <button type="button" class="btn-card-order" data-action="order" data-id="${product.id}" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
+              <button type="button" class="btn-card-order" data-action="order" data-id="${escapeHtml(product.id)}" ${availabilityKnown && selectedSizeIsAvailable ? '' : 'disabled'}>
                 Order
               </button>
             </div>
@@ -612,11 +612,11 @@ function updateCartUI() {
 
   itemsContainer.innerHTML = AppState.cart.map((item, index) => `
     <div class="cart-item">
-      <img src="${item.image}" alt="${item.name}" class="cart-item-img" onerror="this.src='/images/products/barcelona.jpg'" />
+      <img src="${escapeHtml(item.image)}" alt="${escapeHtml(item.name)}" class="cart-item-img" onerror="this.src='/images/products/barcalona.jpg'" />
       <div class="cart-item-details">
-        <div class="cart-item-title">${item.name}</div>
+        <div class="cart-item-title">${escapeHtml(item.name)}</div>
         <div class="cart-item-meta">
-          Size: <span class="badge-size">${item.size}</span> • ৳${item.price.toLocaleString('en-BD')}
+          Size: <span class="badge-size">${escapeHtml(item.size)}</span> • ৳${item.price.toLocaleString('en-BD')}
         </div>
         <div class="cart-item-actions">
           <div class="qty-control">
@@ -662,8 +662,8 @@ function populateOrderModalProductDropdown() {
   if (!select) return;
 
   select.innerHTML = AppState.products.map(p => `
-    <option value="${p.id}" data-price="${p.price}">
-      ${p.name} — ৳${Number(p.price).toLocaleString('en-BD')} (${p.sport})
+    <option value="${escapeHtml(p.id)}" data-price="${Number(p.price)}">
+      ${escapeHtml(p.name)} — ৳${Number(p.price).toLocaleString('en-BD')} (${escapeHtml(p.sport)})
     </option>
   `).join('');
 }
@@ -964,11 +964,11 @@ function performSearch(query) {
   }
 
   container.innerHTML = results.map(product => `
-    <div class="search-result-item" data-id="${product.id}">
-      <img src="${product.image}" alt="${product.name}" class="search-result-thumb" onerror="this.src='/images/products/barcelona.jpg'" />
+    <div class="search-result-item" data-id="${escapeHtml(product.id)}">
+      <img src="${escapeHtml(product.image)}" alt="${escapeHtml(product.name)}" class="search-result-thumb" onerror="this.src='/images/products/barcalona.jpg'" />
       <div class="search-result-info">
-        <div class="search-result-name">${product.name}</div>
-        <div class="search-result-sport">${product.sport}</div>
+        <div class="search-result-name">${escapeHtml(product.name)}</div>
+        <div class="search-result-sport">${escapeHtml(product.sport)}</div>
       </div>
       <div class="search-result-price">৳${Number(product.price).toLocaleString('en-BD')}</div>
     </div>
